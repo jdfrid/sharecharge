@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
-import ShareChargeApp from './pages/ShareChargeApp';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminLayout from './pages/admin/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
@@ -18,6 +17,19 @@ import BannersGallery from './pages/admin/BannersGallery';
 import SocialHub from './pages/admin/SocialHub';
 import TelegramChannels from './pages/admin/TelegramChannels';
 import TikTokStudio from './pages/admin/TikTokStudio';
+import ShareChargeLegacyRedirect from './pages/ShareChargeLegacyRedirect';
+import { ShareChargeLayout } from './sharecharge/routes/ShareChargeLayout';
+import { ClientGate, OpsGate, ProviderGate } from './sharecharge/routes/gates';
+import { SHARECHARGE_ROLE_KEYS } from './sharecharge/constants';
+import { ShareChargeHub } from './sharecharge/pages/ShareChargeHub';
+import { ShareChargeRoleEntry } from './sharecharge/pages/ShareChargeRoleEntry';
+import { ClientShell, OpsShell, ProviderShell } from './sharecharge/pages/shells/AppShells';
+import { ClientDiscoverPage } from './sharecharge/pages/client/ClientDiscoverPage';
+import { ClientActivityPage } from './sharecharge/pages/client/ClientActivityPage';
+import { ProviderDashboardPage } from './sharecharge/pages/provider/ProviderDashboardPage';
+import { ProviderOrdersPage } from './sharecharge/pages/provider/ProviderOrdersPage';
+import { ProviderTransactionsPage } from './sharecharge/pages/provider/ProviderTransactionsPage';
+import { OpsDashboardPage } from './sharecharge/pages/ops/OpsDashboardPage';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -45,9 +57,42 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
-        <Route path="/" element={<Navigate to="/app" replace />} />
-        <Route path="/app" element={<ShareChargeApp />} />
-        <Route path="/app/:role" element={<ShareChargeApp />} />
+        <Route path="/" element={<Navigate to="/sharecharge" replace />} />
+
+        <Route element={<ShareChargeLayout />}>
+          <Route path="/sharecharge" element={<ShareChargeHub />} />
+          <Route path="/client/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.client} />} />
+          <Route path="/provider/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.provider} />} />
+          <Route path="/ops/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.system} />} />
+
+          <Route element={<ClientGate />}>
+            <Route element={<ClientShell />}>
+              <Route path="/client" element={<Navigate to="/client/discover" replace />} />
+              <Route path="/client/discover" element={<ClientDiscoverPage />} />
+              <Route path="/client/activity" element={<ClientActivityPage />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProviderGate />}>
+            <Route element={<ProviderShell />}>
+              <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
+              <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
+              <Route path="/provider/orders" element={<ProviderOrdersPage />} />
+              <Route path="/provider/transactions" element={<ProviderTransactionsPage />} />
+            </Route>
+          </Route>
+
+          <Route element={<OpsGate />}>
+            <Route element={<OpsShell />}>
+              <Route path="/ops" element={<Navigate to="/ops/dashboard" replace />} />
+              <Route path="/ops/dashboard" element={<OpsDashboardPage />} />
+            </Route>
+          </Route>
+        </Route>
+
+        <Route path="/app" element={<Navigate to="/sharecharge" replace />} />
+        <Route path="/app/:role" element={<ShareChargeLegacyRedirect />} />
+
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
@@ -74,4 +119,3 @@ function App() {
 }
 
 export default App;
-

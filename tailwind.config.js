@@ -6,11 +6,23 @@ export default {
   ],
   theme: {
     extend: {
-      fontFamily: {
-        'display': ['Playfair Display', 'Georgia', 'serif'],
-        'sans': ['DM Sans', 'system-ui', 'sans-serif'],
+      borderRadius: {
+        'sc-sm': '0.9rem',
+        'sc-md': '1.25rem',
+        'sc-lg': '1.65rem',
+      },
+      boxShadow: {
+        'sc-card': '0 18px 45px rgba(75, 120, 190, 0.14)',
       },
       colors: {
+        sc: {
+          bg: 'var(--sc-bg)',
+          surface: 'var(--sc-surface)',
+          text: 'var(--sc-text)',
+          muted: 'var(--sc-muted)',
+          accent: 'var(--sc-accent)',
+          accent2: 'var(--sc-accent-2)',
+        },
         gold: {
           50: '#fdfaf3',
           100: '#f9f0d9',
