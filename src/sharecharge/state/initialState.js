@@ -65,7 +65,7 @@ export function getInitialAppState() {
     transactions: [],
     disputes: [],
     events: [
-      { id: 'event-1', text: 'מערכת הדמו הופעלה ומוכנה להזמנות', type: 'system', time: Date.now() - 1000 * 60 * 12 },
+      { id: 'event-1', text: 'המערכת מוכנה לקבלת הזמנות', type: 'system', time: Date.now() - 1000 * 60 * 12 },
     ],
   };
 }

@@ -23,7 +23,7 @@ export function ProviderOrdersPage() {
           <select
             value={activeHost?.id || ''}
             onChange={(e) => setActiveHostId(e.target.value)}
-            className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+            className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
           >
             {hosts.map((host) => (
               <option key={host.id} value={host.id}>
@@ -37,11 +37,11 @@ export function ProviderOrdersPage() {
       <Card>
         <h3 className="mb-3 font-black">בקשות ותור אישור</h3>
         {hostBookings.length === 0 ? (
-          <p className="rounded-sc-sm bg-slate-50 p-4 text-sm text-sc-muted">אין בקשות לספק זה.</p>
+          <p className="rounded-sc-sm border border-sc-border bg-sc-surface p-4 text-sm text-sc-muted">אין בקשות לספק זה.</p>
         ) : (
           <div className="space-y-3">
             {hostBookings.map((booking) => (
-              <div key={booking.id} className="rounded-sc-md bg-slate-50 p-4">
+              <div key={booking.id} className="rounded-sc-md border border-sc-border bg-sc-surface p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-black">
@@ -83,14 +83,14 @@ export function ProviderOrdersPage() {
                       <input
                         value={otpInputs[booking.id] || ''}
                         onChange={(e) => setOtpInputs({ ...otpInputs, [booking.id]: e.target.value })}
-                        className="mt-2 w-full rounded-sc-sm bg-white px-3 py-3 text-center font-mono text-2xl font-black tracking-[0.25em] outline-none ring-1 ring-slate-100"
+                        className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 text-center font-mono text-2xl font-black tracking-[0.25em] outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
                         maxLength={4}
                       />
                     </label>
                     <button
                       type="button"
                       onClick={() => verifyOtp(booking.id, otpInputs[booking.id] || '')}
-                      className="mt-3 w-full rounded-sc-sm bg-sc-text py-3 font-black text-white"
+                      className="mt-3 w-full rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 py-3.5 font-black text-white shadow-sc-card"
                     >
                       אמת OTP
                     </button>
@@ -104,7 +104,7 @@ export function ProviderOrdersPage() {
                       step="0.1"
                       value={finishKwh}
                       onChange={(e) => setFinishKwh(Number(e.target.value))}
-                      className="rounded-sc-sm bg-white px-3 py-3 font-black outline-none ring-1 ring-slate-100"
+                      className="rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
                     />
                     <button
                       type="button"

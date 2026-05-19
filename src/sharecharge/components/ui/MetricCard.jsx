@@ -7,12 +7,12 @@ const toneClasses = {
 
 export function MetricCard({ icon: Icon, value, label, tone = 'emerald' }) {
   return (
-    <div className="rounded-sc-md bg-white/90 p-3 shadow-sm ring-1 ring-slate-100/80">
+    <div className="rounded-sc-md border border-sc-border bg-white p-3 shadow-sm">
       <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-2xl ${toneClasses[tone] || toneClasses.emerald}`}>
         <Icon size={19} />
       </div>
       <p className="text-xl font-black">{value}</p>
-      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="text-xs font-bold text-sc-muted">{label}</p>
     </div>
   );
 }

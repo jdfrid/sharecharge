@@ -16,7 +16,7 @@ export const statusLabels = {
   on_way: 'הנהג בדרך',
   otp_verified: 'OTP אומת',
   charging: 'טעינה פעילה',
-  completed: 'הסתיים ושולם בדמו',
+  completed: 'הושלם ושולם',
   rejected: 'נדחה',
   cancelled: 'בוטל',
 };
@@ -39,8 +39,8 @@ export const roleEntryConfig = {
     cta: 'כניסה כאפליקציית לקוח',
     email: 'driver@sharecharge.app',
     icon: Navigation,
-    gradient: 'from-emerald-500 via-cyan-500 to-sky-600',
-    points: ['עמדות זמינות סביבך', 'רשימה ומפה', 'תשלום דמה וחשבונית'],
+    gradient: 'from-blue-500 via-cyan-500 to-teal-400',
+    points: ['עמדות זמינות סביבך', 'רשימה ומפה', 'תשלום וחשבונית'],
   },
   provider: {
     title: 'כניסת ספק',
@@ -48,7 +48,7 @@ export const roleEntryConfig = {
     cta: 'כניסה כאפליקציית ספק',
     email: 'host@sharecharge.app',
     icon: Home,
-    gradient: 'from-blue-600 via-indigo-500 to-emerald-500',
+    gradient: 'from-sky-600 via-blue-600 to-teal-500',
     points: ['ניהול עמדות', 'אישור בקשות', 'הכנסות ועמלות'],
   },
   system: {
@@ -57,7 +57,7 @@ export const roleEntryConfig = {
     cta: 'כניסה לסביבת ניהול',
     email: 'admin@sharecharge.app',
     icon: ShieldCheck,
-    gradient: 'from-slate-950 via-blue-800 to-emerald-600',
+    gradient: 'from-slate-900 via-blue-900 to-teal-600',
     points: ['יצירת ישויות', 'מחלוקות וחסימות', 'אירועי מערכת'],
   },
 };

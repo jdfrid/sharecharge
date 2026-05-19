@@ -9,6 +9,7 @@ export function ClientShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const isActivity = location.pathname.includes('/activity');
+  const isStation = location.pathname.includes('/station/');
   const { syncSessionProfiles } = useShareCharge();
 
   useEffect(() => {
@@ -20,11 +21,18 @@ export function ClientShell() {
     navigate('/client/entry');
   };
 
+  const title = isStation ? 'הזמנת עמדה' : isActivity ? 'ההזמנות שלי' : 'עמדות לידך';
+  const subtitle = isStation
+    ? 'אשר זמן ושלח בקשה לספק'
+    : isActivity
+      ? 'מעקב מול הספק ו-OTP'
+      : 'רשימה או מפה — בחרו עמדה והמשיכו';
+
   return (
     <MobileAppShell
       portal="client"
-      title={isActivity ? 'ההזמנות שלי' : 'חיפוש עמדה'}
-      subtitle={isActivity ? 'סטטוס, OTP והיסטוריה' : 'מפה או רשימה — והזמנה מהירה'}
+      title={title}
+      subtitle={subtitle}
       onExit={onExit}
       bottomNav={[
         { to: '/client/discover', label: 'חיפוש', icon: Search, end: true },
@@ -35,14 +43,13 @@ export function ClientShell() {
     </MobileAppShell>
   );
 }
-
 export function ProviderShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
 
   const meta = path.includes('/transactions')
-    ? { title: 'עסקאות', subtitle: 'כל העמלאות והחיובים בדמו' }
+    ? { title: 'עסקאות', subtitle: 'הכנסות ופירוט עסקאות' }
     : path.includes('/orders')
       ? { title: 'בקשות', subtitle: 'אישור / דחייה ו-OTP' }
       : { title: 'לוח ספק', subtitle: 'עמדות, מחירים ותנאים' };

@@ -166,7 +166,7 @@ export function ShareChargeProvider({ children }) {
           status: 'paid_mock',
           createdAt: Date.now(),
         });
-        addEvent(draft, `טעינה הסתיימה וחיוב דמה בוצע על סך ${currency(amount)}`);
+        addEvent(draft, `טעינה הסתיימה · חויב סך ${currency(amount)}`);
       }),
       updateStation: (stationId, patch) => update((draft) => {
         const station = draft.stations.find((item) => item.id === stationId);

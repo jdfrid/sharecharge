@@ -58,30 +58,33 @@ export function ShareChargeRoleEntry({ portal }) {
   return (
     <div dir="rtl" className="sc-skin sc-no-motion min-h-screen bg-[var(--sc-bg)] text-sc-text">
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col overflow-hidden px-4 py-[calc(1rem+env(safe-area-inset-top,0px))] pb-8">
-        <div className="pointer-events-none absolute -right-20 top-10 h-60 w-60 rounded-full bg-[var(--sc-accent)]/15 blur-3xl" />
-        <div className="pointer-events-none absolute -left-24 bottom-24 h-72 w-72 rounded-full bg-teal-300/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 top-8 h-56 w-56 rounded-full bg-[var(--sc-accent)]/8 blur-3xl" />
+        <div className="pointer-events-none absolute -left-20 bottom-32 h-64 w-64 rounded-full bg-[var(--sc-accent-2)]/8 blur-3xl" />
 
         <div className="relative z-10 flex items-center justify-between">
-          <Link to="/sharecharge" className="rounded-sc-sm bg-white px-4 py-2 text-sm font-black text-[var(--sc-accent)] shadow-sc-card ring-1 ring-slate-100">
+          <Link
+            to="/sharecharge"
+            className="sc-btn-outline rounded-sc-sm !px-4 !py-2 text-sm !font-black text-[var(--sc-accent)] shadow-sm"
+          >
             ← בחירת אפליקציה
           </Link>
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-teal-700 shadow-sm ring-1 ring-slate-100">
-            דמו מאובטח
+          <span className="rounded-full border border-sc-border bg-white px-3 py-1 text-xs font-black text-[var(--sc-accent-2)] shadow-sm">
+            אימות מאובטח
           </span>
         </div>
 
-        <section className="relative z-10 my-6 rounded-sc-lg bg-white p-5 shadow-sc-card ring-1 ring-slate-100/90">
-          <div className="relative mx-auto mb-6 flex h-44 w-full items-center justify-center overflow-hidden rounded-sc-md bg-gradient-to-br from-[var(--sc-surface)] to-teal-50">
+        <section className="relative z-10 my-6 rounded-sc-lg border border-sc-border bg-white p-5 shadow-sc-card">
+          <div className="relative mx-auto mb-6 flex h-44 w-full items-center justify-center overflow-hidden rounded-sc-md border border-sc-border bg-gradient-to-br from-[var(--sc-surface)] to-white">
             <img src="/sharecharge-logo.png" alt="" className="h-full w-full object-cover opacity-95" />
-            <div className="absolute inset-x-4 bottom-3 rounded-sc-sm bg-white/95 px-4 py-3 shadow-md backdrop-blur">
+            <div className="absolute inset-x-4 bottom-3 rounded-sc-sm border border-sc-border bg-white px-4 py-3 shadow-sm">
               <p className="text-sm font-black text-sc-text">{config.title}</p>
-              <p className="text-xs font-bold text-sc-muted">הזדהות לפי מייל · OTP בדמו</p>
+              <p className="text-xs font-bold text-sc-muted">הזדהות לפי מייל וקוד חד-פעמי</p>
             </div>
           </div>
 
           <div className="text-center">
             <div
-              className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br ${config.gradient} text-white shadow-lg`}
+              className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-sc-md bg-gradient-to-br ${config.gradient} text-white shadow-sc-card`}
             >
               <Icon size={28} />
             </div>
@@ -89,8 +92,11 @@ export function ShareChargeRoleEntry({ portal }) {
             <p className="mx-auto mt-2 max-w-xs text-sm leading-7 text-sc-muted">{config.subtitle}</p>
             <div className="mt-5 grid gap-2">
               {config.points.map((point) => (
-                <div key={point} className="flex items-center gap-2 rounded-sc-sm bg-[var(--sc-surface)] px-4 py-3 text-sm font-bold text-sc-text">
-                  <CheckCircle size={17} className="text-[var(--sc-accent)] shrink-0" />
+                <div
+                  key={point}
+                  className="flex items-center gap-2 rounded-sc-sm border border-sc-border bg-sc-surface px-4 py-3 text-sm font-bold text-sc-text"
+                >
+                  <CheckCircle size={17} className="shrink-0 text-[var(--sc-accent)]" />
                   <span className="text-right">{point}</span>
                 </div>
               ))}
@@ -99,31 +105,27 @@ export function ShareChargeRoleEntry({ portal }) {
         </section>
 
         <div className="relative z-10 space-y-3">
-          <div className="rounded-sc-lg bg-white p-4 shadow-sc-card ring-1 ring-slate-100">
-            <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">OTP לדמו</p>
+          <div className="rounded-sc-lg border border-sc-border bg-white p-4 shadow-sc-card">
+            <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">קוד אימות</p>
             <label className="text-xs font-bold text-sc-muted">
               כתובת מייל
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 w-full rounded-sc-sm bg-slate-50 px-4 py-3 text-right text-sm font-black text-sc-text outline-none ring-1 ring-slate-100"
+                className="sc-field text-right text-sm"
                 inputMode="email"
                 dir="ltr"
               />
             </label>
-            <button
-              type="button"
-              onClick={sendEmailOtp}
-              className="mt-3 w-full rounded-sc-sm bg-[var(--sc-accent)] px-5 py-3 text-sm font-black text-white shadow-sc-card"
-            >
+            <button type="button" onClick={sendEmailOtp} className="sc-btn-primary mt-3 !text-sm">
               שלח קוד OTP
             </button>
 
             {sentOtp && (
-              <div className="mt-3 rounded-sc-sm bg-[var(--sc-surface)] p-3 ring-1 ring-slate-100">
+              <div className="mt-3 rounded-sc-sm border border-sc-border bg-sc-surface p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-sc-muted">דמו</p>
+                    <p className="text-xs font-bold text-sc-muted">נשלח אליכם</p>
                     <p className="truncate text-sm font-black">{email}</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-[var(--sc-accent)] px-3 py-1 text-xs font-black text-white">
@@ -140,7 +142,7 @@ export function ShareChargeRoleEntry({ portal }) {
                 value={otpInput}
                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 placeholder="קוד"
-                className="rounded-sc-sm bg-slate-50 px-4 py-3 text-center font-mono text-xl font-black tracking-[0.2em] outline-none ring-1 ring-slate-100"
+                className="sc-field mt-0 text-center font-mono text-xl tracking-[0.2em]"
                 inputMode="numeric"
                 maxLength={4}
                 dir="ltr"
@@ -148,7 +150,7 @@ export function ShareChargeRoleEntry({ portal }) {
               <button
                 type="button"
                 onClick={verifyEmailOtp}
-                className="rounded-sc-sm bg-sc-text px-5 py-3 text-sm font-black text-white shadow-md"
+                className="self-center rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 px-5 py-3 text-sm font-black text-white shadow-sc-card"
               >
                 אימות
               </button>
@@ -157,7 +159,7 @@ export function ShareChargeRoleEntry({ portal }) {
           </div>
 
           {sessions[portal]?.verified && (
-            <p className="text-center text-xs font-bold text-teal-700">
+            <p className="text-center text-xs font-bold text-[var(--sc-accent-2)]">
               כבר מחוברים — המערכת תעביר אתכם אחרי האימות הבא או{' '}
               <button
                 type="button"

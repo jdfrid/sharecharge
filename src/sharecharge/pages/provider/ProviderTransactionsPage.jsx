@@ -17,7 +17,7 @@ export function ProviderTransactionsPage() {
           <select
             value={activeHostId}
             onChange={(e) => setActiveHostId(e.target.value)}
-            className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+            className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
           >
             {hosts.map((host) => (
               <option key={host.id} value={host.id}>
@@ -31,11 +31,11 @@ export function ProviderTransactionsPage() {
       <Card>
         <h3 className="mb-3 font-black">כל העסקאות</h3>
         {txs.length === 0 ? (
-          <p className="rounded-sc-sm bg-slate-50 p-4 text-sm text-sc-muted">עדיין אין עסקאות שהושלמו לספק זה.</p>
+          <p className="rounded-sc-sm border border-sc-border bg-sc-surface p-4 text-sm text-sc-muted">עדיין אין עסקאות שהושלמו לספק זה.</p>
         ) : (
           <div className="space-y-2">
             {txs.map((tx) => (
-              <div key={tx.id} className="rounded-sc-sm border border-slate-100 bg-white p-3">
+              <div key={tx.id} className="rounded-sc-sm border border-sc-border bg-white p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="min-w-0 truncate font-black">{stationName(tx.stationId)}</p>
                   <strong className="shrink-0">{currency(tx.amount)}</strong>

@@ -35,17 +35,17 @@ export function StationMap({ stations, selectedId, onSelectStation, className = 
 
   return (
     <div dir="ltr" className={`overflow-hidden rounded-sc-lg ring-1 ring-slate-200/80 ${className}`}>
-      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-3 py-2">
+      <div className="flex items-center justify-between border-b border-sc-border bg-white px-3 py-2">
         <p className="text-xs font-black text-sc-text">מפה · {valid.length} עמדות</p>
         <button
           type="button"
           onClick={fitPadding}
-          className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-sc-text"
+          className="rounded-full border border-sc-border bg-sc-surface px-3 py-1 text-[10px] font-black text-sc-text"
         >
           מרכוז
         </button>
       </div>
-      <div className="relative h-[260px] w-full bg-slate-100">
+      <div className="relative h-[260px] w-full bg-sc-surface">
         <Map
           {...viewState}
           onMove={(evt) => setViewState(evt.viewState)}

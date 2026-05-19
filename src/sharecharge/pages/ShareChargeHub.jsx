@@ -22,37 +22,35 @@ export function ShareChargeHub() {
   return (
     <div dir="rtl" className="sc-skin sc-no-motion min-h-screen bg-[var(--sc-bg)] text-sc-text">
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col overflow-hidden px-4 py-[calc(1rem+env(safe-area-inset-top,0px))] pb-10">
-        <div className="pointer-events-none absolute -right-28 top-0 h-72 w-72 rounded-full bg-indigo-400/25 blur-3xl" />
-        <div className="pointer-events-none absolute -left-28 top-56 h-72 w-72 rounded-full bg-teal-300/30 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 top-0 h-48 w-48 rounded-full bg-[var(--sc-accent)]/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-16 top-40 h-56 w-56 rounded-full bg-[var(--sc-accent-2)]/10 blur-3xl" />
 
         <header className="relative z-10 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--sc-accent)]">ShareCharge</p>
-            <h1 className="mt-1 text-3xl font-black leading-tight tracking-tight text-[var(--sc-text)]">
-              בחירת אפליקציה
-            </h1>
+            <h1 className="mt-1 text-3xl font-black leading-tight tracking-tight text-[var(--sc-text)]">בחירת אפליקציה</h1>
             <p className="mt-2 text-sm font-bold text-sc-muted">לקוח · ספק · מנהל מערכת — כל אחד בנתיב נפרד.</p>
           </div>
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-[var(--sc-accent)] to-teal-500 p-3 text-white shadow-sc-card ring-2 ring-white/40">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-sc-md bg-gradient-to-br from-[var(--sc-accent)] to-[var(--sc-accent-2)] p-3 text-white shadow-sc-card">
             <CheckCircle size={26} />
           </div>
         </header>
 
-        <section className="relative z-10 mt-6 overflow-hidden rounded-sc-lg border border-white/60 bg-white/90 p-4 shadow-sc-card backdrop-blur-sm">
-          <div className="relative h-36 overflow-hidden rounded-sc-md bg-gradient-to-br from-indigo-100/80 via-white to-teal-50 ring-1 ring-slate-100">
+        <section className="relative z-10 mt-6 overflow-hidden rounded-sc-lg border border-white/90 bg-white/72 p-4 shadow-sc-card backdrop-blur-xl">
+          <div className="relative h-36 overflow-hidden rounded-sc-md border border-sc-border bg-gradient-to-br from-[var(--sc-surface)] to-white">
             <img src="/sharecharge-logo.png" alt="" className="h-full w-full object-cover opacity-90" />
-            <div className="absolute inset-x-3 bottom-3 rounded-sc-md border border-white/70 bg-white/95 p-3 shadow-sm">
-              <p className="text-sm font-black text-sc-text">מראה מעודכן · PWA · נתונים מקושרים לאימייל הכניסה</p>
+            <div className="absolute inset-x-3 bottom-3 rounded-sc-md border border-sc-border bg-white p-3 shadow-sm">
+              <p className="text-sm font-black text-sc-text">ממשק עדכני · PWA · נתונים מקושרים לאימייל הכניסה</p>
               <p className="mt-1 text-xs font-bold text-sc-muted">הדביקו את הקישורים למטה בדפדפן או שלחו לטלפון.</p>
             </div>
           </div>
         </section>
 
-        <div className="relative z-10 mt-4 rounded-sc-lg border border-indigo-100 bg-white p-4 shadow-sm">
+        <div className="relative z-10 mt-4 rounded-sc-lg border border-white/90 bg-white/72 p-4 shadow-sm backdrop-blur-xl">
           <p className="text-xs font-black uppercase tracking-wider text-[var(--sc-accent)]">קישורים ישירים (Hash Router)</p>
           <ul className="mt-3 space-y-2 text-xs">
             {linkRows.map(({ label, path }) => (
-              <li key={path} className="rounded-sc-sm bg-slate-50/90 px-3 py-2 ring-1 ring-slate-100">
+              <li key={path} className="rounded-sc-sm border border-sc-border bg-sc-surface px-3 py-2">
                 <span className="font-bold text-sc-text">{label}</span>
                 <div className="mt-1 break-all font-mono text-[11px] text-sc-muted" dir="ltr">
                   {shareChargeHashUrl(path)}
@@ -70,10 +68,10 @@ export function ShareChargeHub() {
               <Link
                 key={portal}
                 to={to}
-                className="group flex items-center gap-4 rounded-sc-lg border border-white/70 bg-white p-4 shadow-sc-card ring-1 ring-indigo-100/60"
+                className="group flex items-center gap-4 rounded-sc-lg border border-white/90 bg-white/75 p-4 shadow-sc-card backdrop-blur-md"
               >
                 <div
-                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${item.gradient} text-white shadow-md`}
+                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-sc-md bg-gradient-to-br ${item.gradient} text-white shadow-md`}
                 >
                   <Icon size={25} />
                 </div>
@@ -81,7 +79,7 @@ export function ShareChargeHub() {
                   <h2 className="text-lg font-black">{item.title}</h2>
                   <p className="mt-1 line-clamp-2 text-sm leading-6 text-sc-muted">{item.subtitle}</p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--sc-surface)] text-[var(--sc-accent)]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-sc-md bg-[var(--sc-surface)] text-[var(--sc-accent)] ring-1 ring-sc-border">
                   <ChevronLeft size={20} />
                 </div>
               </Link>
@@ -89,8 +87,8 @@ export function ShareChargeHub() {
           })}
         </div>
 
-        <p className="relative z-10 mt-6 rounded-sc-md border border-slate-700/50 bg-gradient-to-l from-slate-900 to-slate-800 p-4 text-sm leading-7 text-white/90 shadow-sc-card">
-          פאנל <span className="font-black text-amber-200">/admin</span> (מבצעים) נשאר נפרד.
+        <p className="relative z-10 mt-6 rounded-sc-lg border border-white/80 bg-gradient-to-br from-slate-900 via-blue-950/90 to-slate-900 p-4 text-sm leading-7 text-white/95 shadow-sc-card backdrop-blur-sm">
+          פאנל <span className="font-black text-cyan-300">/admin</span> (מבצעים) נשאר נפרד.
         </p>
       </div>
     </div>

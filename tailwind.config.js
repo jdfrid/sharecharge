@@ -7,12 +7,15 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        'sc-sm': '0.9rem',
-        'sc-md': '1.25rem',
-        'sc-lg': '1.65rem',
+        'sc-sm': 'var(--sc-radius-sm)',
+        'sc-md': 'var(--sc-radius-md)',
+        'sc-lg': 'var(--sc-radius-lg)',
       },
       boxShadow: {
-        'sc-card': '0 18px 45px rgba(75, 120, 190, 0.14)',
+        'sc-card': '0 10px 30px rgba(0, 0, 0, 0.05)',
+      },
+      borderColor: {
+        'sc-border': 'var(--sc-border)',
       },
       colors: {
         sc: {
@@ -22,6 +25,7 @@ export default {
           muted: 'var(--sc-muted)',
           accent: 'var(--sc-accent)',
           accent2: 'var(--sc-accent-2)',
+          border: 'var(--sc-border)',
         },
         gold: {
           50: '#fdfaf3',

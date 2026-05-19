@@ -21,10 +21,10 @@ export function ClientActivityPage() {
   return (
     <>
       {activeBooking && (
-        <Card className="border-teal-100 bg-teal-50/80">
+        <Card className="border-[var(--sc-accent-2)]/25 bg-[var(--sc-accent-2)]/[0.06]">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-black text-teal-800">הזמנה פעילה</p>
+              <p className="text-sm font-black text-[var(--sc-accent-2)]">הזמנה פעילה</p>
               <h3 className="mt-1 text-xl font-black">{stationFor(activeBooking)?.name}</h3>
               <p className="mt-1 text-sm text-sc-muted">{stationFor(activeBooking)?.address}</p>
             </div>
@@ -53,16 +53,16 @@ export function ClientActivityPage() {
             <button
               type="button"
               onClick={() => markOnWay(activeBooking.id)}
-              className="mt-4 w-full rounded-sc-sm bg-sc-text py-3 font-black text-white"
+              className="mt-4 w-full rounded-sc-md bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 py-3.5 font-black text-white shadow-sc-card"
             >
               אני בדרך — צור OTP
             </button>
           )}
 
           {activeBooking.status === 'on_way' && (
-            <div className="mt-4 rounded-sc-md bg-sc-text p-5 text-center text-white">
+            <div className="mt-4 rounded-sc-lg bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 p-5 text-center text-white shadow-sc-card ring-1 ring-white/10">
               <p className="text-sm text-white/70">הציגו לספק</p>
-              <p className="mt-2 font-mono text-5xl font-black tracking-[0.35em] text-teal-300">{activeBooking.otp}</p>
+              <p className="mt-2 font-mono text-5xl font-black tracking-[0.35em] text-[var(--sc-accent-2)]">{activeBooking.otp}</p>
               <p className="mt-3 text-xs text-white/55">הספק מאמת לפני התחלת טעינה</p>
             </div>
           )}
@@ -81,9 +81,11 @@ export function ClientActivityPage() {
             <div className="mt-4 rounded-sc-md bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-black">טעינה פעילה</p>
-                <p className="max-w-[55%] text-right text-xs font-bold text-teal-700">הספק יסיים ויחייב בדמו</p>
+                <p className="max-w-[55%] text-right text-xs font-bold text-[var(--sc-accent-2)]">
+                  הספק יסיים את הטעינה ויחייב לפי מחירון
+                </p>
               </div>
-              <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-sc-surface ring-1 ring-sc-border">
                 <div className="h-full w-2/3 rounded-full bg-[var(--sc-accent)]" />
               </div>
             </div>
@@ -112,7 +114,7 @@ export function ClientActivityPage() {
           <h3 className="mb-3 font-black">היסטוריה</h3>
           <div className="space-y-2">
             {completedBookings.map((booking) => (
-              <div key={booking.id} className="flex items-center justify-between rounded-sc-sm bg-slate-50 p-3 text-sm">
+              <div key={booking.id} className="flex items-center justify-between rounded-sc-sm border border-sc-border bg-sc-surface p-3 text-sm">
                 <span>{stationFor(booking)?.name}</span>
                 <strong>{currency(booking.amount)}</strong>
               </div>

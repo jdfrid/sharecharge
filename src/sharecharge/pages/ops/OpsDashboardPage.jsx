@@ -103,23 +103,23 @@ export function OpsDashboardPage() {
         <button
           type="button"
           onClick={reset}
-          className="flex items-center gap-2 rounded-sc-sm bg-white px-3 py-2 text-xs font-black text-sc-text shadow-sm ring-1 ring-slate-200"
+          className="flex items-center gap-2 rounded-sc-sm border border-sc-border bg-white px-3 py-2 text-xs font-black text-sc-text shadow-sm"
         >
           <RefreshCw size={16} />
-          איפוס דמו
+          איפוס נתונים
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-sc-text text-white">
-          <CreditCard className="text-teal-300" size={23} />
-          <p className="mt-3 text-2xl font-black">{currency(totalVolume)}</p>
-          <p className="text-xs text-white/60">מחזור עסקאות</p>
+        <Card className="border-s-4 border-[var(--sc-accent-2)] bg-white">
+          <CreditCard className="text-[var(--sc-accent-2)]" size={23} />
+          <p className="mt-3 text-2xl font-black text-sc-text">{currency(totalVolume)}</p>
+          <p className="text-xs text-sc-muted">מחזור עסקאות</p>
         </Card>
-        <Card className="bg-[var(--sc-accent)] text-white">
-          <Gauge size={23} />
-          <p className="mt-3 text-2xl font-black">{currency(platformFees)}</p>
-          <p className="text-xs text-white/85">עמלות מיזם</p>
+        <Card className="border-s-4 border-[var(--sc-accent)] bg-white">
+          <Gauge className="text-[var(--sc-accent)]" size={23} />
+          <p className="mt-3 text-2xl font-black text-sc-text">{currency(platformFees)}</p>
+          <p className="text-xs text-sc-muted">עמלות מיזם</p>
         </Card>
       </div>
 
@@ -133,7 +133,7 @@ export function OpsDashboardPage() {
             <input
               value={hostForm.name}
               onChange={(e) => setHostForm({ ...hostForm, name: e.target.value })}
-              className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+              className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
             />
           </label>
           <label className="text-sm font-bold text-sc-muted">
@@ -141,7 +141,7 @@ export function OpsDashboardPage() {
             <input
               value={hostForm.email}
               onChange={(e) => setHostForm({ ...hostForm, email: e.target.value })}
-              className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 text-left font-black outline-none"
+              className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 text-left font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               dir="ltr"
               inputMode="email"
             />
@@ -152,12 +152,12 @@ export function OpsDashboardPage() {
         </form>
         <div className="mt-3 space-y-2">
           {hosts.map((host) => (
-            <div key={host.id} className="flex items-center justify-between rounded-sc-sm bg-slate-50 p-3 text-sm">
+            <div key={host.id} className="flex items-center justify-between rounded-sc-sm border border-sc-border bg-sc-surface p-3 text-sm">
               <div>
                 <p className="font-black">{host.name}</p>
                 <p className="text-xs text-sc-muted">{host.email || ''}</p>
               </div>
-              <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-800">
+              <span className="rounded-full bg-[var(--sc-accent-2)]/12 px-3 py-1 text-xs font-black text-[var(--sc-accent-2)]">
                 {state.stations.filter((station) => station.hostId === host.id).length} עמדות
               </span>
             </div>
@@ -175,7 +175,7 @@ export function OpsDashboardPage() {
             <input
               value={driverForm.name}
               onChange={(e) => setDriverForm({ ...driverForm, name: e.target.value })}
-              className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+              className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
             />
           </label>
           <label className="text-sm font-bold text-sc-muted">
@@ -183,12 +183,12 @@ export function OpsDashboardPage() {
             <input
               value={driverForm.email}
               onChange={(e) => setDriverForm({ ...driverForm, email: e.target.value })}
-              className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 text-left font-black outline-none"
+              className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 text-left font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               dir="ltr"
               inputMode="email"
             />
           </label>
-          <button type="submit" className="w-full rounded-sc-sm bg-teal-600 py-3 font-black text-white">
+          <button type="submit" className="w-full rounded-sc-sm bg-[var(--sc-accent-2)] py-3 font-black text-white shadow-sm">
             הוסף לקוח
           </button>
         </form>
@@ -205,7 +205,7 @@ export function OpsDashboardPage() {
               <input
                 value={stationForm.name}
                 onChange={(e) => setStationForm({ ...stationForm, name: e.target.value })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               />
             </label>
             <label className="col-span-2 text-sm font-bold text-sc-muted">
@@ -213,7 +213,7 @@ export function OpsDashboardPage() {
               <input
                 value={stationForm.address}
                 onChange={(e) => setStationForm({ ...stationForm, address: e.target.value })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               />
             </label>
             <label className="text-sm font-bold text-sc-muted">
@@ -221,7 +221,7 @@ export function OpsDashboardPage() {
               <select
                 value={stationForm.hostId}
                 onChange={(e) => setStationForm({ ...stationForm, hostId: e.target.value })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               >
                 {hosts.map((host) => (
                   <option key={host.id} value={host.id}>
@@ -235,7 +235,7 @@ export function OpsDashboardPage() {
               <select
                 value={stationForm.plug}
                 onChange={(e) => setStationForm({ ...stationForm, plug: e.target.value })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               >
                 <option>Type 2</option>
                 <option>CCS</option>
@@ -248,7 +248,7 @@ export function OpsDashboardPage() {
                 type="number"
                 value={stationForm.power}
                 onChange={(e) => setStationForm({ ...stationForm, power: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               />
             </label>
             <label className="text-sm font-bold text-sc-muted">
@@ -258,7 +258,7 @@ export function OpsDashboardPage() {
                 step="0.05"
                 value={stationForm.pricePerKwh}
                 onChange={(e) => setStationForm({ ...stationForm, pricePerKwh: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               />
             </label>
             <label className="text-sm font-bold text-sc-muted">
@@ -268,7 +268,7 @@ export function OpsDashboardPage() {
                 step="0.1"
                 value={stationForm.distance}
                 onChange={(e) => setStationForm({ ...stationForm, distance: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               />
             </label>
             <label className="text-sm font-bold text-sc-muted">
@@ -278,7 +278,7 @@ export function OpsDashboardPage() {
                 step="0.0001"
                 value={stationForm.lat}
                 onChange={(e) => setStationForm({ ...stationForm, lat: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
                 dir="ltr"
               />
             </label>
@@ -289,7 +289,7 @@ export function OpsDashboardPage() {
                 step="0.0001"
                 value={stationForm.lng}
                 onChange={(e) => setStationForm({ ...stationForm, lng: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm bg-slate-100 px-3 py-3 font-black outline-none"
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
                 dir="ltr"
               />
             </label>
@@ -299,11 +299,11 @@ export function OpsDashboardPage() {
                 value={stationForm.termsText}
                 onChange={(e) => setStationForm({ ...stationForm, termsText: e.target.value })}
                 rows={2}
-                className="mt-2 w-full resize-none rounded-sc-sm bg-slate-100 px-3 py-3 font-bold outline-none"
+                className="mt-2 w-full resize-none rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-bold outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
               />
             </label>
           </div>
-          <button type="submit" className="w-full rounded-sc-sm bg-sc-text py-3 font-black text-white">
+          <button type="submit" className="w-full rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 py-3.5 font-black text-white shadow-sc-card">
             הוסף עמדה
           </button>
         </form>
@@ -314,26 +314,26 @@ export function OpsDashboardPage() {
           <TrendingUp size={19} className="text-[var(--sc-accent)]" /> דוחות
         </h3>
         <div className="grid grid-cols-2 gap-3 text-center">
-          <div className="rounded-sc-sm bg-slate-50 p-3">
+          <div className="rounded-sc-sm border border-sc-border bg-sc-surface p-3">
             <p className="text-xl font-black">{currency(hostPayouts)}</p>
             <p className="text-xs text-sc-muted">לספקים</p>
           </div>
-          <div className="rounded-sc-sm bg-slate-50 p-3">
+          <div className="rounded-sc-sm border border-sc-border bg-sc-surface p-3">
             <p className="text-xl font-black">{totalKwh.toFixed(1)}</p>
             <p className="text-xs text-sc-muted">kWh</p>
           </div>
-          <div className="rounded-sc-sm bg-slate-50 p-3">
+          <div className="rounded-sc-sm border border-sc-border bg-sc-surface p-3">
             <p className="text-xl font-black">{completedBookings.length}</p>
             <p className="text-xs text-sc-muted">טעינות הושלמו</p>
           </div>
-          <div className="rounded-sc-sm bg-slate-50 p-3">
+          <div className="rounded-sc-sm border border-sc-border bg-sc-surface p-3">
             <p className="text-xl font-black">{state.stations.length}</p>
             <p className="text-xs text-sc-muted">עמדות</p>
           </div>
         </div>
         <div className="mt-4 space-y-2">
           {revenueByStation.slice(0, 5).map(({ station, volume, platformFees: fees, count }) => (
-            <div key={station.id} className="rounded-sc-sm bg-slate-50 p-3">
+            <div key={station.id} className="rounded-sc-sm border border-sc-border bg-sc-surface p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="font-black">{station.name}</p>
@@ -367,7 +367,7 @@ export function OpsDashboardPage() {
               onChange={(e) => setCommission(e.target.value)}
               className="w-full"
             />
-            <span className="w-14 rounded-sc-sm bg-slate-100 py-2 text-center font-black">{state.settings.commission}%</span>
+            <span className="w-14 rounded-sc-sm border border-sc-border bg-sc-surface py-2 text-center font-black">{state.settings.commission}%</span>
           </div>
         </label>
       </Card>
@@ -378,7 +378,7 @@ export function OpsDashboardPage() {
         </h3>
         <div className="space-y-2">
           {customerHistory.map((customer) => (
-            <div key={customer.id} className="rounded-sc-sm bg-slate-50 p-3">
+            <div key={customer.id} className="rounded-sc-sm border border-sc-border bg-sc-surface p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-black">{customer.name}</p>
@@ -402,7 +402,7 @@ export function OpsDashboardPage() {
           <AlertTriangle size={19} className="text-amber-500" /> מחלוקות
         </h3>
         {openDisputes.length === 0 ? (
-          <p className="rounded-sc-sm bg-slate-50 p-4 text-sm text-sc-muted">אין מחלוקות פתוחות.</p>
+          <p className="rounded-sc-sm border border-sc-border bg-sc-surface p-4 text-sm text-sc-muted">אין מחלוקות פתוחות.</p>
         ) : (
           <div className="space-y-2">
             {openDisputes.map((dispute) => (
@@ -412,7 +412,7 @@ export function OpsDashboardPage() {
                 <button
                   type="button"
                   onClick={() => resolveDispute(dispute.id)}
-                  className="mt-2 w-full rounded-sc-sm bg-sc-text py-2 font-black text-white"
+                  className="mt-2 w-full rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 py-2.5 font-black text-white shadow-sm"
                 >
                   סגור מחלוקת
                 </button>
@@ -428,7 +428,7 @@ export function OpsDashboardPage() {
         </h3>
         <div className="space-y-2">
           {state.users.map((user) => (
-            <div key={user.id} className="flex items-center justify-between rounded-sc-sm bg-slate-50 p-3">
+            <div key={user.id} className="flex items-center justify-between rounded-sc-sm border border-sc-border bg-sc-surface p-3">
               <div>
                 <p className="font-black">{user.name}</p>
                 <p className="text-xs text-sc-muted">
@@ -439,7 +439,7 @@ export function OpsDashboardPage() {
                 type="button"
                 onClick={() => toggleBlockUser(user.id)}
                 className={`rounded-sc-sm px-3 py-2 text-xs font-black ${
-                  user.blocked ? 'bg-red-100 text-red-800' : 'bg-white text-sc-muted ring-1 ring-slate-200'
+                  user.blocked ? 'bg-red-100 text-red-800' : 'bg-white text-sc-muted ring-1 ring-sc-border'
                 }`}
               >
                 {user.blocked ? <XCircle size={16} /> : <Ban size={16} />}
@@ -455,9 +455,9 @@ export function OpsDashboardPage() {
         </h3>
         <div className="space-y-2">
           {state.events.map((event) => (
-            <div key={event.id} className="rounded-sc-sm bg-slate-50 p-3 text-sm">
+            <div key={event.id} className="rounded-sc-sm border border-sc-border bg-sc-surface p-3 text-sm">
               <p className="font-bold">{event.text}</p>
-              <p className="mt-1 text-xs text-slate-400">{shortTime(event.time)}</p>
+              <p className="mt-1 text-xs text-sc-muted">{shortTime(event.time)}</p>
             </div>
           ))}
         </div>
