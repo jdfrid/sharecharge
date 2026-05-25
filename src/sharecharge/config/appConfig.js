@@ -1,24 +1,49 @@
 /** @typedef {'all'|'client'|'provider'|'ops'} ShareChargeAppFlavor */
 
-export const SHARECHARGE_APP = /** @type {ShareChargeAppFlavor} */ (
-  import.meta.env.VITE_SHARECHARGE_APP || 'all'
-);
+let _app = /** @type {ShareChargeAppFlavor} */ (import.meta.env.VITE_SHARECHARGE_APP || 'all');
 
-export const isSingleAppBuild = SHARECHARGE_APP !== 'all';
+/** Set at boot from native applicationId (Capacitor) — fixes shared APK web assets. */
+export function initShareChargeApp(flavor) {
+  if (flavor === 'client' || flavor === 'provider' || flavor === 'ops' || flavor === 'all') {
+    _app = flavor;
+  }
+}
 
-export const appEntryPath = {
+export function getShareChargeApp() {
+  return _app;
+}
+
+/** @deprecated use getShareChargeApp() — kept for gradual migration */
+export const SHARECHARGE_APP = _app;
+
+export function isSingleAppBuild() {
+  return getShareChargeApp() !== 'all';
+}
+
+const ENTRY_PATHS = {
   client: '/client/entry',
   provider: '/provider/entry',
   ops: '/ops/entry',
   all: '/sharecharge',
-}[SHARECHARGE_APP] || '/sharecharge';
+};
 
-export const appDefaultAuthedPath = {
+const AUTH_PATHS = {
   client: '/client/discover',
   provider: '/provider/dashboard',
   ops: '/ops/dashboard',
   all: '/sharecharge',
-}[SHARECHARGE_APP] || '/sharecharge';
+};
+
+export function getAppEntryPath() {
+  return ENTRY_PATHS[getShareChargeApp()] || '/sharecharge';
+}
+
+export function getAppDefaultAuthedPath() {
+  return AUTH_PATHS[getShareChargeApp()] || '/sharecharge';
+}
+
+/** @deprecated use getAppEntryPath() */
+export const appEntryPath = ENTRY_PATHS[_app] || '/sharecharge';
 
 const APP_TO_PORTAL = {
   client: 'client',
@@ -27,6 +52,17 @@ const APP_TO_PORTAL = {
 };
 
 export function flavorAllowsPortal(portal) {
-  if (!isSingleAppBuild) return true;
-  return APP_TO_PORTAL[SHARECHARGE_APP] === portal;
+  if (!isSingleAppBuild()) return true;
+  return APP_TO_PORTAL[getShareChargeApp()] === portal;
+}
+
+export function flavorLabel() {
+  return (
+    {
+      client: 'לקוח',
+      provider: 'ספק',
+      ops: 'ניהול',
+      all: 'ShareCharge',
+    }[getShareChargeApp()] || 'ShareCharge'
+  );
 }

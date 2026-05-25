@@ -1,45 +1,46 @@
+import { useEffect, useState } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-import { loadAuthSessions } from '../auth/session';
-import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
-import { getStoredToken } from '../data/sharechargeApi';
+import { isPortalSessionReady, sanitizePortalSession } from '../auth/session';
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
-import { isSingleAppBuild, SHARECHARGE_APP } from '../config/appConfig';
+import { isSingleAppBuild, getShareChargeApp } from '../config/appConfig';
 
-function gateBlocked(portal) {
-  if (isSingleAppBuild) {
+function usePortalGate(portal) {
+  const [ready, setReady] = useState(() => {
+    sanitizePortalSession(portal);
+    return isPortalSessionReady(portal);
+  });
+
+  useEffect(() => {
+    sanitizePortalSession(portal);
+    setReady(isPortalSessionReady(portal));
+  }, [portal]);
+
+  if (isSingleAppBuild()) {
+    const app = getShareChargeApp();
     const allowed =
-      (SHARECHARGE_APP === 'client' && portal === SHARECHARGE_ROLE_KEYS.client) ||
-      (SHARECHARGE_APP === 'provider' && portal === SHARECHARGE_ROLE_KEYS.provider) ||
-      (SHARECHARGE_APP === 'ops' && portal === SHARECHARGE_ROLE_KEYS.system);
-    if (!allowed) return true;
+      (app === 'client' && portal === SHARECHARGE_ROLE_KEYS.client) ||
+      (app === 'provider' && portal === SHARECHARGE_ROLE_KEYS.provider) ||
+      (app === 'ops' && portal === SHARECHARGE_ROLE_KEYS.system);
+    if (!allowed) return 'blocked';
   }
 
-  const s = loadAuthSessions();
-  if (!s[portal]?.verified) return true;
-
-  if (getPreferredRepositoryMode() === 'api' && !getStoredToken(portal) && !s[portal]?.token) {
-    return true;
-  }
-  return false;
+  return ready ? 'open' : 'login';
 }
 
 export function ClientGate() {
-  if (gateBlocked(SHARECHARGE_ROLE_KEYS.client)) {
-    return <Navigate to="/client/entry" replace />;
-  }
+  const gate = usePortalGate(SHARECHARGE_ROLE_KEYS.client);
+  if (gate !== 'open') return <Navigate to="/client/entry" replace />;
   return <Outlet />;
 }
 
 export function ProviderGate() {
-  if (gateBlocked(SHARECHARGE_ROLE_KEYS.provider)) {
-    return <Navigate to="/provider/entry" replace />;
-  }
+  const gate = usePortalGate(SHARECHARGE_ROLE_KEYS.provider);
+  if (gate !== 'open') return <Navigate to="/provider/entry" replace />;
   return <Outlet />;
 }
 
 export function OpsGate() {
-  if (gateBlocked(SHARECHARGE_ROLE_KEYS.system)) {
-    return <Navigate to="/ops/entry" replace />;
-  }
+  const gate = usePortalGate(SHARECHARGE_ROLE_KEYS.system);
+  if (gate !== 'open') return <Navigate to="/ops/entry" replace />;
   return <Outlet />;
 }

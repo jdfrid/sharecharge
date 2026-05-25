@@ -3,10 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import { roleEntryConfig, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
-import { sendOtp, verifyOtp } from '../data/sharechargeApi';
+import { formatShareChargeApiError, getApiOrigin, isNetworkFetchError, sendOtp, verifyOtp } from '../data/sharechargeApi';
 import { createOtp, shortTime } from '../utils';
-import { clearAuthSession, loadAuthSessions, setAuthSession } from '../auth/session';
-import { isSingleAppBuild } from '../config/appConfig';
+import { clearAuthSession, isPortalSessionReady, sanitizePortalSession, setAuthSession } from '../auth/session';
+import { isSingleAppBuild, flavorLabel } from '../config/appConfig';
 
 const portalPaths = {
   [SHARECHARGE_ROLE_KEYS.client]: '/client/discover',
@@ -22,9 +22,22 @@ export function ShareChargeRoleEntry({ portal }) {
   const [sentOtp, setSentOtp] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
   const [sentAt, setSentAt] = useState(null);
+  const [offlineDemo, setOfflineDemo] = useState(false);
 
-  const useApi = getPreferredRepositoryMode() === 'api';
+  const useApi = getPreferredRepositoryMode() === 'api' && !offlineDemo;
+  const apiOrigin = getApiOrigin();
+
+  const startLocalOtp = (notice) => {
+    const code = createOtp();
+    setOfflineDemo(true);
+    setSentOtp(code);
+    setOtpInput('');
+    setSentAt(Date.now());
+    setAuthNotice(notice || 'מצב דמו מקומי — הקוד מוצג למטה (ללא שרת).');
+    setAuthError('');
+  };
 
   const sendEmailOtp = async () => {
     if (!email.includes('@')) {
@@ -32,30 +45,44 @@ export function ShareChargeRoleEntry({ portal }) {
       return;
     }
     setAuthError('');
+    setAuthNotice('');
     try {
       if (useApi) {
         const data = await sendOtp(email, portal);
         setSentOtp(data.devCode || 'sent');
         setOtpInput(data.devCode || '');
-      } else {
-        const code = createOtp();
-        setSentOtp(code);
-        setOtpInput('');
+        setSentAt(Date.now());
+        if (data.devCode) {
+          setAuthNotice('קוד מהשרת — הוזן אוטומטית ב-dev.');
+        }
+        return;
       }
-      setSentAt(Date.now());
+      startLocalOtp('קוד דמו מקומי — הזינו את הקוד המוצג למטה.');
     } catch (err) {
-      setAuthError(err.message || 'שליחת קוד נכשלה');
+      if (isNetworkFetchError(err) || err?.network) {
+        startLocalOtp('השרת לא זמין — עברנו למצb דמו מקומי. הקוד מוצג למטה.');
+        return;
+      }
+      setAuthError(formatShareChargeApiError(err, 'otp'));
     }
   };
 
   const verifyEmailOtp = async () => {
-    if (!sentOtp && !useApi) {
+    if (useApi && !sentOtp) {
+      setAuthError('קודם יש לשלוח קוד OTP');
+      return;
+    }
+    if (!useApi && !sentOtp) {
       setAuthError('קודם יש לשלוח קוד למייל');
       return;
     }
     setAuthError('');
     try {
       if (useApi) {
+        if (!otpInput.trim()) {
+          setAuthError('יש להזין את קוד האימות');
+          return;
+        }
         const data = await verifyOtp(email, portal, otpInput.trim());
         setAuthSession(portal, {
           verified: true,
@@ -68,22 +95,39 @@ export function ShareChargeRoleEntry({ portal }) {
           setAuthError('קוד שגוי. נסה שוב או שלח קוד חדש');
           return;
         }
-        setAuthSession(portal, { verified: true, email, verifiedAt: Date.now() });
+        setAuthSession(portal, {
+          verified: true,
+          email,
+          verifiedAt: Date.now(),
+          offlineDemo: offlineDemo || undefined,
+        });
       }
       navigate(portalPaths[portal], { replace: true });
     } catch (err) {
-      setAuthError(err.message || 'אימות נכשל');
+      if ((isNetworkFetchError(err) || err?.network) && sentOtp) {
+        if (otpInput.trim() !== sentOtp) {
+          setAuthError('קוד שגוי. נסה שוב או שלח קוד חדש');
+          return;
+        }
+        setAuthSession(portal, {
+          verified: true,
+          email,
+          verifiedAt: Date.now(),
+          offlineDemo: true,
+        });
+        navigate(portalPaths[portal], { replace: true });
+        return;
+      }
+      setAuthError(formatShareChargeApiError(err, 'verify'));
     }
   };
 
   useEffect(() => {
-    const s = loadAuthSessions();
-    if (s[portal]?.verified) {
+    sanitizePortalSession(portal);
+    if (isPortalSessionReady(portal)) {
       navigate(portalPaths[portal], { replace: true });
     }
   }, [portal, navigate]);
-
-  const sessions = loadAuthSessions();
 
   return (
     <div dir="rtl" className="sc-skin sc-no-motion min-h-screen bg-[var(--sc-bg)] text-sc-text">
@@ -92,7 +136,7 @@ export function ShareChargeRoleEntry({ portal }) {
         <div className="pointer-events-none absolute -left-20 bottom-32 h-64 w-64 rounded-full bg-[var(--sc-accent-2)]/8 blur-3xl" />
 
         <div className="relative z-10 flex items-center justify-between">
-          {!isSingleAppBuild ? (
+          {!isSingleAppBuild() ? (
             <Link
               to="/sharecharge"
               className="sc-btn-outline rounded-sc-sm !px-4 !py-2 text-sm !font-black text-[var(--sc-accent)] shadow-sm"
@@ -103,13 +147,13 @@ export function ShareChargeRoleEntry({ portal }) {
             <span />
           )}
           <span className="rounded-full border border-sc-border bg-white px-3 py-1 text-xs font-black text-[var(--sc-accent-2)] shadow-sm">
-            אימות מאובטח
+            אפליקציית {flavorLabel()}
           </span>
         </div>
 
         <section className="relative z-10 my-6 rounded-sc-lg border border-sc-border bg-white p-5 shadow-sc-card">
           <div className="relative mx-auto mb-6 flex h-44 w-full items-center justify-center overflow-hidden rounded-sc-md border border-sc-border bg-gradient-to-br from-[var(--sc-surface)] to-white">
-            <img src="/sharecharge-logo.png" alt="" className="h-full w-full object-cover opacity-95" />
+            <img src="./sharecharge-logo.png" alt="" className="h-full w-full object-cover opacity-95" />
             <div className="absolute inset-x-4 bottom-3 rounded-sc-sm border border-sc-border bg-white px-4 py-3 shadow-sm">
               <p className="text-sm font-black text-sc-text">{config.title}</p>
               <p className="text-xs font-bold text-sc-muted">הזדהות לפי מייל וקוד חד-פעמי</p>
@@ -139,6 +183,11 @@ export function ShareChargeRoleEntry({ portal }) {
         </section>
 
         <div className="relative z-10 space-y-3">
+          {useApi && apiOrigin ? (
+            <p className="rounded-sc-sm border border-sc-border bg-white/80 px-3 py-2 text-[11px] font-bold leading-6 text-sc-muted">
+              שרת API: <span dir="ltr">{apiOrigin}</span>
+            </p>
+          ) : null}
           <div className="rounded-sc-lg border border-sc-border bg-white p-4 shadow-sc-card">
             <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">קוד אימות</p>
             <label className="text-xs font-bold text-sc-muted">
@@ -155,10 +204,10 @@ export function ShareChargeRoleEntry({ portal }) {
               שלח קוד OTP
             </button>
 
-                {useApi && sentOtp ? (
-                  <p className="mt-2 text-xs text-sc-muted">הקוד נשלח — בדוק לוג שרver ב-dev או הזן את הקוד מהמייל.</p>
-                ) : null}
-                {!useApi && sentOtp ? (
+            {useApi && sentOtp ? (
+              <p className="mt-2 text-xs text-sc-muted">הקוד נשלח — בדוק לוג שרver ב-dev או הזן את הקוד מהמייל.</p>
+            ) : null}
+            {!useApi && sentOtp ? (
               <div className="mt-3 rounded-sc-sm border border-sc-border bg-sc-surface p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -192,10 +241,11 @@ export function ShareChargeRoleEntry({ portal }) {
                 אימות
               </button>
             </div>
+            {authNotice && <p className="mt-2 text-sm font-bold text-[var(--sc-accent-2)]">{authNotice}</p>}
             {authError && <p className="mt-2 text-sm font-bold text-red-500">{authError}</p>}
           </div>
 
-          {sessions[portal]?.verified && (
+          {isPortalSessionReady(portal) && (
             <p className="text-center text-xs font-bold text-[var(--sc-accent-2)]">
               כבר מחוברים — המערכת תעביר אתכם אחרי האימות הבא או{' '}
               <button

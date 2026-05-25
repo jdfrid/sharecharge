@@ -10,10 +10,8 @@ export function ShareChargeLayout() {
   return (
     <ShareChargeProvider>
       {!splashDone && <ShareChargeSplash onDone={() => setSplashDone(true)} />}
-      <div className={splashDone ? 'sc-app-ready' : 'sc-app-loading'}>
-        <SyncStatusBar />
-        <Outlet />
-      </div>
+      <SyncStatusBar />
+      <Outlet />
     </ShareChargeProvider>
   );
 }

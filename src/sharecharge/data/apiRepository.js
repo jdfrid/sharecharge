@@ -1,6 +1,7 @@
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
 import { getPreferredRepositoryMode } from './apiRepository.stub';
 import { sharechargeApi } from './sharechargeApi';
+import { getShareChargeApp } from '../config/appConfig';
 
 export function isApiMode() {  return getPreferredRepositoryMode() === 'api';
 }
@@ -12,7 +13,7 @@ const APP_TO_PORTAL = {
 };
 
 export function portalForContext() {
-  const app = import.meta.env.VITE_SHARECHARGE_APP;
+  const app = getShareChargeApp();
   if (app && app !== 'all' && APP_TO_PORTAL[app]) return APP_TO_PORTAL[app];
   return null;
 }

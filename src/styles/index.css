@@ -933,12 +933,6 @@ select option {
   animation: scSplashBar 1.2s ease-out both;
 }
 
-.sc-app-loading {
-  visibility: hidden;
-  height: 100vh;
-  overflow: hidden;
-}
-
 .sc-app-ready {
   animation: scAppFadeIn 0.35s ease-out both;
 }

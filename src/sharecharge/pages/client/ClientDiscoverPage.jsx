@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BatteryCharging,
@@ -14,7 +14,10 @@ import { driverLocationProfiles } from '../../constants';
 import { resolveDriverIdForSession } from '../../auth/identity';
 import { shortTime } from '../../utils';
 import { Card } from '../../components/ui/Card';
-import { StationMap } from '../../components/StationMap';
+
+const StationMap = lazy(() =>
+  import('../../components/StationMap').then((m) => ({ default: m.StationMap })),
+);
 
 export function ClientDiscoverPage() {
   const { state } = useShareCharge();
@@ -168,14 +171,16 @@ export function ClientDiscoverPage() {
       )}
 
       {!activeBooking && view === 'map' && filteredStations.length > 0 && (
-        <StationMap
-          stations={filteredStations}
-          selectedId={mapSelectedId}
-          onSelectStation={(s) => {
-            setMapSelectedId(s.id);
-            openStation(s.id);
-          }}
-        />
+        <Suspense fallback={<Card><p className="text-center text-sm font-bold text-sc-muted">טוען מפה…</p></Card>}>
+          <StationMap
+            stations={filteredStations}
+            selectedId={mapSelectedId}
+            onSelectStation={(s) => {
+              setMapSelectedId(s.id);
+              openStation(s.id);
+            }}
+          />
+        </Suspense>
       )}
 
       {!activeBooking &&

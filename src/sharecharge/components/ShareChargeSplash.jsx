@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Zap } from 'lucide-react';
-import { SHARECHARGE_APP } from '../config/appConfig';
+import { getShareChargeApp } from '../config/appConfig';
 
 const flavorMeta = {
   client: { label: 'לקוח', gradient: 'from-[#007bff] via-[#0095ff] to-[#00d1c1]' },
@@ -11,7 +11,7 @@ const flavorMeta = {
 
 export function ShareChargeSplash({ onDone }) {
   const [visible, setVisible] = useState(true);
-  const meta = flavorMeta[SHARECHARGE_APP] || flavorMeta.all;
+  const meta = flavorMeta[getShareChargeApp()] || flavorMeta.all;
 
   useEffect(() => {
     const t = setTimeout(() => {

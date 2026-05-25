@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { useSyncedProviderHost } from '../../hooks/useSyncedProviderHost';
 import { shortTime } from '../../utils';
@@ -7,13 +8,29 @@ import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
 
 export function ProviderOrdersPage() {
-  const { state, approveBooking, rejectBooking, verifyOtp, finishCharge } = useShareCharge();
+  const { state, approveBooking, rejectBooking, verifyOtp, finishCharge, refreshFromApi, repositoryMode } = useShareCharge();
   const { hosts, activeHostId, setActiveHostId, activeHost } = useSyncedProviderHost(state);
   const hostBookings = state.bookings.filter((booking) => booking.hostId === activeHost?.id);
   const stationFor = (booking) => state.stations.find((station) => station.id === booking.stationId);
   const driverFor = (booking) => state.users.find((u) => u.id === booking.driverId);
   const [otpInputs, setOtpInputs] = useState({});
   const [finishKwh, setFinishKwh] = useState(18.4);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (repositoryMode !== 'api') return undefined;
+    refreshFromApi();
+    return undefined;
+  }, [repositoryMode, refreshFromApi]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshFromApi();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <>
@@ -35,7 +52,20 @@ export function ProviderOrdersPage() {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-black">בקשות ותור אישור</h3>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="font-black">בקשות ותור אישור</h3>
+          {repositoryMode === 'api' ? (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1 rounded-sc-sm border border-sc-border bg-white px-3 py-2 text-xs font-black text-[var(--sc-accent)]"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              רענון
+            </button>
+          ) : null}
+        </div>
         {hostBookings.length === 0 ? (
           <p className="rounded-sc-sm border border-sc-border bg-sc-surface p-4 text-sm text-sc-muted">אין בקשות לספק זה.</p>
         ) : (

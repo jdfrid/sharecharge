@@ -4,6 +4,9 @@ import { Search, CalendarClock, LayoutGrid, ClipboardList, Wallet } from 'lucide
 import { MobileAppShell } from '../../components/shell/MobileAppShell';
 import { clearAuthSession } from '../../auth/session';
 import { useShareCharge } from '../../context/ShareChargeContext';
+import { getAppEntryPath, getShareChargeApp, isSingleAppBuild } from '../../config/appConfig';
+
+const homeLink = () => (isSingleAppBuild() ? getAppEntryPath() : '/sharecharge');
 
 export function ClientShell() {
   const navigate = useNavigate();
@@ -34,6 +37,7 @@ export function ClientShell() {
       title={title}
       subtitle={subtitle}
       onExit={onExit}
+      homeTo={homeLink()}
       bottomNav={[
         { to: '/client/discover', label: 'חיפוש', icon: Search, end: true },
         { to: '/client/activity', label: 'הזמנות', icon: CalendarClock },
@@ -47,6 +51,13 @@ export function ProviderShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
+  const { refreshFromApi, repositoryMode } = useShareCharge();
+
+  useEffect(() => {
+    if (repositoryMode !== 'api') return undefined;
+    refreshFromApi();
+    return undefined;
+  }, [repositoryMode, refreshFromApi]);
 
   const meta = path.includes('/transactions')
     ? { title: 'עסקאות', subtitle: 'הכנסות ופירוט עסקאות' }
@@ -65,6 +76,7 @@ export function ProviderShell() {
       title={meta.title}
       subtitle={meta.subtitle}
       onExit={onExit}
+      homeTo={homeLink()}
       bottomNav={[
         { to: '/provider/dashboard', label: 'ראשי', icon: LayoutGrid, end: true },
         { to: '/provider/orders', label: 'הזמנות', icon: ClipboardList },
@@ -88,6 +100,7 @@ export function OpsShell() {
       title="מנהל מערכת"
       subtitle="ספקים, לקוחות, עמדות ודוחות"
       onExit={onExit}
+      homeTo={homeLink()}
       bottomNav={[]}
     >
       <Outlet />

@@ -27,7 +27,7 @@ router.post('/otp/send', async (req, res) => {
     res.json({
       ok: true,
       sentAt: Date.now(),
-      devCode: process.env.NODE_ENV !== 'production' ? code : undefined,
+      devCode: process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP === 'true' ? code : undefined,
     });
   } catch (err) {
     console.error(err);

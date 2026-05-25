@@ -1,7 +1,17 @@
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
-import { clearStoredToken } from '../data/sharechargeApi';
+import { clearStoredToken, getStoredToken } from '../data/sharechargeApi';
+import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 
 const AUTH_KEY = 'sharecharge-auth-sessions-v2';
+
+function storage() {
+  try {
+    if (typeof localStorage !== 'undefined') return localStorage;
+  } catch {
+    /* ignore */
+  }
+  return sessionStorage;
+}
 
 const LEGACY_MAP = {
   driver: SHARECHARGE_ROLE_KEYS.client,
@@ -23,15 +33,16 @@ function migrateRoles(raw) {
 
 export function loadAuthSessions() {
   try {
-    const v2 = sessionStorage.getItem(AUTH_KEY);
+    const store = storage();
+    const v2 = store.getItem(AUTH_KEY);
     if (v2) {
       const parsed = JSON.parse(v2);
       return migrateRoles(parsed);
     }
-    const legacy = sessionStorage.getItem('sharecharge-auth-sessions');
+    const legacy = store.getItem('sharecharge-auth-sessions');
     if (legacy) {
       const parsed = migrateRoles(JSON.parse(legacy));
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify(parsed));
+      store.setItem(AUTH_KEY, JSON.stringify(parsed));
       return parsed;
     }
   } catch (e) {
@@ -41,7 +52,7 @@ export function loadAuthSessions() {
 }
 
 export function saveAuthSessions(sessions) {
-  sessionStorage.setItem(AUTH_KEY, JSON.stringify(sessions));
+  storage().setItem(AUTH_KEY, JSON.stringify(sessions));
 }
 
 export function clearAuthSession(role) {
@@ -55,4 +66,26 @@ export function setAuthSession(role, payload) {
   const sessions = loadAuthSessions();
   sessions[role] = payload;
   saveAuthSessions(sessions);
+}
+
+/** True when session is valid for entering the app (includes JWT in API mode). */
+export function isPortalSessionReady(portal) {
+  const s = loadAuthSessions();
+  if (!s[portal]?.verified) return false;
+  if (s[portal]?.offlineDemo) return true;
+  if (getPreferredRepositoryMode() === 'api') {
+    return !!(s[portal]?.token || getStoredToken(portal));
+  }
+  return true;
+}
+
+/** Clears half-broken sessions (verified flag without token) that cause redirect loops. */
+export function sanitizePortalSession(portal) {
+  const s = loadAuthSessions();
+  if (!s[portal]?.verified) return false;
+  if (getPreferredRepositoryMode() === 'api' && !s[portal]?.token && !getStoredToken(portal)) {
+    clearAuthSession(portal);
+    return true;
+  }
+  return false;
 }

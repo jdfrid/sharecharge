@@ -3,8 +3,35 @@ const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api/sharecharge` : '/api/sharecharg
 
 const TOKEN_KEY = 'sharecharge-jwt';
 
+export function getApiOrigin() {
+  return API_ORIGIN;
+}
+
 export function getApiBase() {
   return API_BASE;
+}
+
+export function isNetworkFetchError(err) {
+  if (!err) return false;
+  if (err.network === true) return true;
+  if (err.cause && isNetworkFetchError(err.cause)) return true;
+  const msg = String(err.message || err).toLowerCase();
+  return (
+    err.name === 'TypeError' ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('network request failed') ||
+    msg.includes('load failed') ||
+    msg.includes('לא ניתן להגיע לשרת')
+  );
+}
+
+export function formatShareChargeApiError(err, action = 'request') {
+  if (isNetworkFetchError(err)) {
+    const target = API_ORIGIN || 'השרת המקומי';
+    return `לא ניתן להגיע לשרת (${target}). ודאו: 1) הטלפון והמחשב על אותו Wi‑Fi 2) npm run start:api פועל 3) חומת אש מאפשרת פורט 3001.`;
+  }
+  return err?.message || (action === 'otp' ? 'שליחת קוד נכשלה' : 'הבקשה נכשלה');
 }
 
 export function getStoredToken(portal) {
@@ -38,11 +65,19 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
   const headers = { 'Content-Type': 'application/json' };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    const wrapped = new Error(formatShareChargeApiError(err));
+    wrapped.cause = err;
+    wrapped.network = true;
+    throw wrapped;
+  }
 
   let data = null;
   const text = await res.text();

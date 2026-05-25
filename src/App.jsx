@@ -21,7 +21,7 @@ import ShareChargeLegacyRedirect from './pages/ShareChargeLegacyRedirect';
 import { ShareChargeLayout } from './sharecharge/routes/ShareChargeLayout';
 import { ClientGate, OpsGate, ProviderGate } from './sharecharge/routes/gates';
 import { SHARECHARGE_ROLE_KEYS } from './sharecharge/constants';
-import { appEntryPath, isSingleAppBuild, SHARECHARGE_APP } from './sharecharge/config/appConfig';
+import { getAppEntryPath, getShareChargeApp, isSingleAppBuild } from './sharecharge/config/appConfig';
 import { ShareChargeHub } from './sharecharge/pages/ShareChargeHub';
 import { ShareChargeRoleEntry } from './sharecharge/pages/ShareChargeRoleEntry';
 import { ClientShell, OpsShell, ProviderShell } from './sharecharge/pages/shells/AppShells';
@@ -55,14 +55,16 @@ function ProtectedRoute({ children, roles }) {
   return children;
 }
 
-function ShareChargeAppRoutes() {
-  const showClient = SHARECHARGE_APP === 'all' || SHARECHARGE_APP === 'client';
-  const showProvider = SHARECHARGE_APP === 'all' || SHARECHARGE_APP === 'provider';
-  const showOps = SHARECHARGE_APP === 'all' || SHARECHARGE_APP === 'ops';
+/** Must be invoked as {shareChargeRouteElements()} — not a <Component /> (React Router rejects that). */
+function shareChargeRouteElements() {
+  const app = getShareChargeApp();
+  const showClient = app === 'all' || app === 'client';
+  const showProvider = app === 'all' || app === 'provider';
+  const showOps = app === 'all' || app === 'ops';
 
   return (
     <>
-      {!isSingleAppBuild && <Route path="/sharecharge" element={<ShareChargeHub />} />}
+      {!isSingleAppBuild() && <Route path="/sharecharge" element={<ShareChargeHub />} />}
 
       {showClient && (
         <>
@@ -108,8 +110,8 @@ function ShareChargeAppRoutes() {
 }
 
 function App() {
-  const rootPath = isSingleAppBuild ? appEntryPath : '/sharecharge';
-  const includeDealsAdmin = !isSingleAppBuild;
+  const rootPath = isSingleAppBuild() ? getAppEntryPath() : '/sharecharge';
+  const includeDealsAdmin = !isSingleAppBuild();
 
   return (
     <AuthProvider>
@@ -117,7 +119,7 @@ function App() {
         <Route path="/" element={<Navigate to={rootPath} replace />} />
 
         <Route element={<ShareChargeLayout />}>
-          <ShareChargeAppRoutes />
+          {shareChargeRouteElements()}
         </Route>
 
         <Route path="/app" element={<Navigate to={rootPath} replace />} />

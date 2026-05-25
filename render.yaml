@@ -1,5 +1,19 @@
 services:
   - type: web
+    name: sharecharge
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    plan: free
+    envVars:
+      - key: VITE_SHARECHARGE_DATA_MODE
+        value: api
+      - key: VITE_SHARECHARGE_APP
+        value: all
+      - key: VITE_SHARECHARGE_API_URL
+        value: https://sharecharge-api.onrender.com
+
+  - type: web
     name: sharecharge-api
     runtime: docker
     dockerfilePath: ./server/Dockerfile
@@ -23,6 +37,8 @@ services:
         value: "true"
       - key: NODE_ENV
         value: production
+      - key: ALLOW_DEV_OTP
+        value: "true"
 
 databases:
   - name: sharecharge-db

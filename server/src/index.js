@@ -31,6 +31,15 @@ app.use(
 );
 app.use(express.json({ limit: '2mb' }));
 
+app.get('/', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'sharecharge-api',
+    health: '/api/health',
+    api: '/api/sharecharge',
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'sharecharge-api', port: PORT });
 });

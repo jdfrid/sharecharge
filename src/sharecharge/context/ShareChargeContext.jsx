@@ -2,12 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { localStorageRepository } from '../data/localStorageRepository';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 import { isApiMode, loadStateFromApi } from '../data/apiRepository';
-import { sharechargeApi } from '../data/sharechargeApi';
+import { sharechargeApi, getStoredToken } from '../data/sharechargeApi';
 import { getInitialAppState } from '../state/initialState';
 import { STORAGE_KEY, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { createId, createOtp, currency } from '../utils';
 import { loadAuthSessions } from '../auth/session';
 import { ensureDriverUserForEmail } from '../auth/identity';
+import { getShareChargeApp } from '../config/appConfig';
 
 const ShareChargeContext = createContext(null);
 
@@ -16,20 +17,11 @@ function addEvent(draft, text, type = 'activity') {
   draft.events = draft.events.slice(0, 20);
 }
 
-function getInitialState() {
-  if (isApiMode()) return getInitialAppState();
-  try {
-    const fromRepo = localStorageRepository.load();
-    if (fromRepo && typeof fromRepo === 'object') return fromRepo;
-  } catch (error) {
-    console.error('Failed to load ShareCharge state', error);
-  }
-  return getInitialAppState();
-}
-
 function activePortalForApi() {
-  const app = import.meta.env.VITE_SHARECHARGE_APP;
-  if (app && app !== 'all') return app;
+  const app = getShareChargeApp();
+  if (app === 'client') return SHARECHARGE_ROLE_KEYS.client;
+  if (app === 'provider') return SHARECHARGE_ROLE_KEYS.provider;
+  if (app === 'ops') return SHARECHARGE_ROLE_KEYS.system;
   const sessions = loadAuthSessions();
   if (sessions[SHARECHARGE_ROLE_KEYS.system]?.verified) return SHARECHARGE_ROLE_KEYS.system;
   if (sessions[SHARECHARGE_ROLE_KEYS.provider]?.verified) return SHARECHARGE_ROLE_KEYS.provider;
@@ -37,13 +29,43 @@ function activePortalForApi() {
   return SHARECHARGE_ROLE_KEYS.client;
 }
 
+function portalUsesOfflineDemo(portal = activePortalForApi()) {
+  return !!loadAuthSessions()[portal]?.offlineDemo;
+}
+
 export function ShareChargeProvider({ children }) {
   const repositoryMode = getPreferredRepositoryMode();
-  const useApi = repositoryMode === 'api';
+  const useApi = repositoryMode === 'api' && !portalUsesOfflineDemo();
 
-  const [state, setState] = useState(() => getInitialState());
+  const [state, setState] = useState(() => {
+    if (repositoryMode === 'api' && !portalUsesOfflineDemo()) return getInitialAppState();
+    try {
+      const fromRepo = localStorageRepository.load();
+      if (fromRepo && typeof fromRepo === 'object') return fromRepo;
+    } catch (error) {
+      console.error('Failed to load ShareCharge state', error);
+    }
+    return getInitialAppState();
+  });
   const [loading, setLoading] = useState(useApi);
   const [syncError, setSyncError] = useState(null);
+
+  useEffect(() => {
+    if (useApi) return;
+    try {
+      const fromRepo = localStorageRepository.load();
+      if (fromRepo && typeof fromRepo === 'object') {
+        setState(fromRepo);
+      } else {
+        setState(getInitialAppState());
+      }
+    } catch (error) {
+      console.error('Failed to load ShareCharge state', error);
+      setState(getInitialAppState());
+    }
+    setLoading(false);
+    setSyncError(null);
+  }, [useApi]);
 
   const refreshFromApi = useCallback(async (portal = activePortalForApi()) => {
     if (!useApi) return;
@@ -60,12 +82,15 @@ export function ShareChargeProvider({ children }) {
   }, [useApi]);
 
   useEffect(() => {
-    if (useApi) {
-      refreshFromApi();
-      const id = setInterval(() => refreshFromApi(), 15000);
-      return () => clearInterval(id);
+    if (!useApi) return undefined;
+    const portal = activePortalForApi();
+    if (!getStoredToken(portal)) {
+      setLoading(false);
+      return undefined;
     }
-    return undefined;
+    refreshFromApi();
+    const id = setInterval(() => refreshFromApi(), 5000);
+    return () => clearInterval(id);
   }, [useApi, refreshFromApi]);
 
   useEffect(() => {
@@ -90,7 +115,7 @@ export function ShareChargeProvider({ children }) {
 
   const update = (producer) => {
     setState((current) => {
-      const next = structuredClone(current);
+      const next = JSON.parse(JSON.stringify(current));
       producer(next);
       return next;
     });
@@ -118,7 +143,7 @@ export function ShareChargeProvider({ children }) {
       },
       syncSessionProfiles: () => {
         if (useApi) {
-          refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          refreshFromApi(activePortalForApi());
           return;
         }
         update((draft) => {
