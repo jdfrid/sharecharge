@@ -2,17 +2,33 @@
 
 כשה-API המקומי לא נגיש מהטלפון (Wi‑Fi / חומת אש), העלה ל-**Render** — HTTPS ציבורי, בלי IP מקומי.
 
-## 1. Deploy (פעם אחת)
+## חשוב: URL אחד ל-API + אתר
 
-1. **דחוף את הקוד המעודכן ל-GitHub** (`jdfrid/sharecharge`) — חובה! Render בונה מה-remote, לא מהמחשב המקומי.
-2. [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**
-3. חבר את הריפו → **Apply** (קורא `render.yaml`)
-4. נוצרים:
-   - **sharecharge** — אתר סטטי (PWA) → `https://sharecharge.onrender.com`
-   - **sharecharge-api** — Node + Docker
-   - **sharecharge-db** — PostgreSQL
+ה-APK והאתר משתמשים ב:
 
-Deploy ראשון לוקח ~5–10 דקות.
+```
+https://sharecharge.onrender.com
+```
+
+(לא `sharecharge-api` — השירות הזה החזיר 404.)
+
+Render מריץ **Docker אחד**: אתר + API + PostgreSQL.
+
+## 1. Deploy / עדכון Render
+
+1. **דחוף ל-GitHub** (כולל `Dockerfile` + `render.yaml` המעודכנים)
+2. Render Dashboard → **sharecharge** → **Manual Deploy** (או Blueprint → Apply)
+3. המתן ~5–10 דקות (build Docker + DB)
+
+בדיקה:
+
+```
+https://sharecharge.onrender.com/api/health
+```
+
+אמור: `{"ok":true,"service":"sharecharge-api",...}`
+
+## 2. Deploy (פעם אחת) — ישן
 
 ### עמוד ריק ב-`sharecharge.onrender.com`
 

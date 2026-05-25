@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 
-const defaultUrl = process.env.RENDER_API_URL || 'https://sharecharge-api.onrender.com';
+const defaultUrl = process.env.RENDER_API_URL || 'https://sharecharge.onrender.com';
 const rawUrl = (process.argv[2] || defaultUrl).replace(/\/$/, '');
 const flavors = ['client', 'provider', 'ops'];
 

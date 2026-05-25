@@ -3,6 +3,53 @@ const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api/sharecharge` : '/api/sharecharg
 
 const TOKEN_KEY = 'sharecharge-jwt';
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function fetchWithTimeout(url, ms = 25000, init = {}) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new TypeError('Request timed out')), ms);
+    fetch(url, init)
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
+function parseHealthPayload(text = '') {
+  try {
+    const data = JSON.parse(text);
+    if (data?.ok === true && typeof data?.service === 'string') {
+      return data;
+    }
+  } catch {
+    /* not JSON */
+  }
+  return null;
+}
+
+function blockedResponseMessage(text = '') {
+  if (/netfree\.link/i.test(text)) {
+    return 'NetFree חוסם את onrender.com. השתמשו ברשת ללא סינון, או חברו דומיין משלכם ב-Render (למשל api.sharecharge.app).';
+  }
+  const trimmed = text.trim();
+  if (
+    trimmed.startsWith('<!DOCTYPE') ||
+    trimmed.startsWith('<html') ||
+    trimmed.includes('<div id="root"') ||
+    trimmed.includes('/assets/index-')
+  ) {
+    return 'כתובת /api/health מחזירה את האתר (HTML) במקום JSON — ה-API לא deployed. ב-Render: Manual Deploy עם Dockerfile החדש.';
+  }
+  return null;
+}
+
 export function getApiOrigin() {
   return API_ORIGIN;
 }
@@ -27,11 +74,47 @@ export function isNetworkFetchError(err) {
 }
 
 export function formatShareChargeApiError(err, action = 'request') {
+  if (err?.blocked) return err.message;
   if (isNetworkFetchError(err)) {
-    const target = API_ORIGIN || 'השרת המקומי';
-    return `לא ניתן להגיע לשרת (${target}). ודאו: 1) הטלפון והמחשב על אותו Wi‑Fi 2) npm run start:api פועל 3) חומת אש מאפשרת פורט 3001.`;
+    const target = API_ORIGIN || 'השרת';
+    if (API_ORIGIN.includes('onrender.com')) {
+      return `לא ניתן להגיע לשרver (${target}). Render Free «נרדם» — נסו «נסה שוב» אחרי ~30 שניות. ודאו ש-/api/health מחזיר JSON בדפדפן.`;
+    }
+    return `לא ניתן להגיע לשרver (${target}). ודאו: 1) הטלפון והמחשב על אותו Wi‑Fi 2) npm run start:api פועל 3) חומת אש מאפשרת פורט 3001.`;
   }
-  return err?.message || (action === 'otp' ? 'שליחת קוד נכשלה' : 'הבקשה נכשלה');
+  return err?.message || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : 'הבקשה נכשלה');
+}
+
+/** Wake Render / verify connectivity before OTP. */
+export async function checkApiHealth({ retries = 3, delayMs = 12000 } = {}) {
+  if (!API_ORIGIN) {
+    return { ok: false, reason: 'missing-url', message: 'לא הוגדר VITE_SHARECHARGE_API_URL ב-build.' };
+  }
+
+  const url = `${API_ORIGIN}/api/health`;
+  let lastMessage = 'השרver לא עונה';
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(url, 22000);
+      const text = await res.text();
+      const blocked = blockedResponseMessage(text);
+      if (blocked) {
+        return { ok: false, reason: 'html-not-api', message: blocked, attempt };
+      }
+      if (parseHealthPayload(text)) {
+        return { ok: true, attempt };
+      }
+      lastMessage = res.status === 404
+        ? `404 ב-${url} — אין API. Render Dashboard → sharecharge → Manual Deploy (Dockerfile).`
+        : `HTTP ${res.status} — לא JSON תקין מ-/api/health`;
+    } catch (err) {
+      lastMessage = formatShareChargeApiError(err);
+    }
+    if (attempt < retries) await sleep(delayMs);
+  }
+
+  return { ok: false, reason: 'unreachable', message: lastMessage, retries };
 }
 
 export function getStoredToken(portal) {
@@ -67,7 +150,7 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
 
   let res;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetchWithTimeout(`${API_BASE}${path}`, 25000, {
       method,
       headers,
       body: body != null ? JSON.stringify(body) : undefined,
@@ -81,10 +164,19 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
 
   let data = null;
   const text = await res.text();
+  const blocked = blockedResponseMessage(text);
+  if (blocked) {
+    const err = new Error(blocked);
+    err.blocked = true;
+    err.network = true;
+    throw err;
+  }
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    data = { error: text || res.statusText };
+    const err = new Error('השרver החזיר תשובה לא תקינה (לא JSON).');
+    err.blocked = true;
+    throw err;
   }
 
   if (!res.ok) {

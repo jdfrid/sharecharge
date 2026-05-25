@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Calendar,
   Clock,
@@ -12,11 +12,25 @@ import { StatusPill } from '../../components/ui/StatusPill';
 
 export function ClientActivityPage() {
   const { state, markOnWay, driverStartCharge, openDispute } = useShareCharge();
+  const [actionError, setActionError] = useState('');
+  const [busy, setBusy] = useState(false);
   const myDriverId = useMemo(() => resolveDriverIdForSession(state), [state.users]);
   const driverBookings = state.bookings.filter((item) => item.driverId === myDriverId);
   const activeBooking = driverBookings.find((item) => !['completed', 'rejected', 'cancelled'].includes(item.status));
   const completedBookings = driverBookings.filter((item) => item.status === 'completed');
   const stationFor = (booking) => state.stations.find((station) => station.id === booking.stationId);
+
+  const runAction = async (fn) => {
+    setBusy(true);
+    setActionError('');
+    try {
+      await fn();
+    } catch (err) {
+      setActionError(err?.message || 'הפעולה נכשלה — בדקו חיבור לשרver');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -52,10 +66,11 @@ export function ClientActivityPage() {
           {activeBooking.status === 'approved' && (
             <button
               type="button"
-              onClick={() => markOnWay(activeBooking.id)}
-              className="mt-4 w-full rounded-sc-md bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 py-3.5 font-black text-white shadow-sc-card"
+              onClick={() => runAction(() => markOnWay(activeBooking.id))}
+              disabled={busy}
+              className="mt-4 w-full rounded-sc-md bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 py-3.5 font-black text-white shadow-sc-card disabled:opacity-60"
             >
-              אני בדרך — צור OTP
+              {busy ? 'שולח…' : 'אני בדרך — צור OTP'}
             </button>
           )}
 
@@ -63,17 +78,18 @@ export function ClientActivityPage() {
             <div className="mt-4 rounded-sc-lg bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 p-5 text-center text-white shadow-sc-card ring-1 ring-white/10">
               <p className="text-sm text-white/70">הציגו לספק</p>
               <p className="mt-2 font-mono text-5xl font-black tracking-[0.35em] text-[var(--sc-accent-2)]">{activeBooking.otp}</p>
-              <p className="mt-3 text-xs text-white/55">הספק מאמת לפני התחלת טעינה</p>
+              <p className="mt-3 text-xs text-white/55">הספק מאמת את הקוד באפליקציית הספק — אחרי אימות תופיע «אשר התחלת טעינה»</p>
             </div>
           )}
 
           {activeBooking.status === 'otp_verified' && (
             <button
               type="button"
-              onClick={() => driverStartCharge(activeBooking.id)}
-              className="mt-4 w-full rounded-sc-sm bg-[var(--sc-accent)] py-3 font-black text-white"
+              onClick={() => runAction(() => driverStartCharge(activeBooking.id))}
+              disabled={busy}
+              className="mt-4 w-full rounded-sc-sm bg-[var(--sc-accent)] py-3 font-black text-white disabled:opacity-60"
             >
-              אשר התחלת טעינה
+              {busy ? '…' : 'אשר התחלת טעינה'}
             </button>
           )}
 
@@ -100,6 +116,12 @@ export function ClientActivityPage() {
               פנייה למנהל מערכת
             </button>
           )}
+        </Card>
+      )}
+
+      {actionError && (
+        <Card>
+          <p className="text-center text-sm font-bold text-red-600">{actionError}</p>
         </Card>
       )}
 

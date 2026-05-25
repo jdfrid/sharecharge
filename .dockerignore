@@ -1,0 +1,9 @@
+node_modules
+dist
+android
+release
+.git
+.env
+.env.*.local
+*.apk
+server/node_modules

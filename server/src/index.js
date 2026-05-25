@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import stationRoutes from './routes/stations.js';
 import bookingRoutes from './routes/bookings.js';
@@ -9,6 +12,10 @@ import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
 
 dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.join(__dirname, '..', 'public');
+const hasPublic = fs.existsSync(path.join(publicDir, 'index.html'));
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -48,6 +55,13 @@ app.use('/api/sharecharge/auth', authRoutes);
 app.use('/api/sharecharge/stations', stationRoutes);
 app.use('/api/sharecharge/bookings', bookingRoutes);
 app.use('/api/sharecharge/ops', opsRoutes);
+
+if (hasPublic) {
+  app.use(express.static(publicDir, { index: false }));
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+}
 
 async function boot() {
   if (process.env.AUTO_MIGRATE !== 'false') {

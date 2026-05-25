@@ -12,6 +12,8 @@ export function ClientStationPage() {
   const station = state.stations.find((s) => s.id === stationId);
   const [selectedTime, setSelectedTime] = useState('19:30');
   const [durationHours, setDurationHours] = useState(2);
+  const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   if (!station) {
     return <Navigate to="/client/discover" replace />;
@@ -20,8 +22,16 @@ export function ClientStationPage() {
   const host = state.users.find((u) => u.id === station.hostId);
 
   const handleConfirm = async () => {
-    await createBooking({ stationId: station.id, startTime: selectedTime, durationHours });
-    navigate('/client/activity', { replace: true });
+    setBusy(true);
+    setSubmitError('');
+    try {
+      await createBooking({ stationId: station.id, startTime: selectedTime, durationHours });
+      navigate('/client/activity', { replace: true });
+    } catch (err) {
+      setSubmitError(err?.message || 'שליחת ההזמנה נכשלה — בדקו חיבור לשרver');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -107,11 +117,15 @@ export function ClientStationPage() {
         <button
           type="button"
           onClick={handleConfirm}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-sc-md bg-gradient-to-l from-[#007bff] via-[#0095ff] to-[#00d1c1] py-4 text-base font-black text-white shadow-sc-card"
+          disabled={busy}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-sc-md bg-gradient-to-l from-[#007bff] via-[#0095ff] to-[#00d1c1] py-4 text-base font-black text-white shadow-sc-card disabled:opacity-60"
         >
-          שלח בקשת הזמנה לספק
+          {busy ? 'שולח הזמנה…' : 'שלח בקשת הזמנה לספק'}
           <ChevronLeft size={20} />
         </button>
+        {submitError ? (
+          <p className="mt-3 text-center text-sm font-bold text-red-600">{submitError}</p>
+        ) : null}
         <p className="mt-3 text-center text-[11px] font-bold text-sc-muted">
           לאחר האישור תועברו אוטומטית למסך המעקב מול הספק.
         </p>

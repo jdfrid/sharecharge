@@ -72,12 +72,18 @@ function probeHealth(ip) {
 }
 
 const forceApi = process.argv.includes('--api');
-const ipArg = process.argv.slice(2).find((arg) => !arg.startsWith('--') && /^\d+\.\d+\.\d+\.\d+$/.test(arg));
-const ip = ipArg || detectLanIp();
-const apiUrl = `http://${ip}:${port}`;
-const flavors = ['client', 'provider', 'ops'];
 
 async function main() {
+  if (process.env.SKIP_LAN_IP === '1' || process.env.SKIP_LAN_IP === 'true') {
+    console.log('Skipping LAN IP detection (SKIP_LAN_IP — using existing .env.*.local).');
+    return;
+  }
+
+  const ipArg = process.argv.slice(2).find((arg) => !arg.startsWith('--') && /^\d+\.\d+\.\d+\.\d+$/.test(arg));
+  const ip = ipArg || detectLanIp();
+  const apiUrl = `http://${ip}:${port}`;
+  const flavors = ['client', 'provider', 'ops'];
+
   const apiUp = await probeHealth(ip);
   const dataMode = forceApi ? (apiUp ? 'api' : 'local') : apiUp ? 'api' : 'local';
 

@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import { roleEntryConfig, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
-import { formatShareChargeApiError, getApiOrigin, isNetworkFetchError, sendOtp, verifyOtp } from '../data/sharechargeApi';
+import {
+  checkApiHealth,
+  formatShareChargeApiError,
+  getApiOrigin,
+  sendOtp,
+  verifyOtp,
+} from '../data/sharechargeApi';
 import { createOtp, shortTime } from '../utils';
 import { clearAuthSession, isPortalSessionReady, sanitizePortalSession, setAuthSession } from '../auth/session';
 import { isSingleAppBuild, flavorLabel } from '../config/appConfig';
@@ -14,76 +20,71 @@ const portalPaths = {
   [SHARECHARGE_ROLE_KEYS.system]: '/ops/dashboard',
 };
 
+function isOtpCode(value) {
+  return /^\d{4}$/.test(String(value || '').trim());
+}
+
 export function ShareChargeRoleEntry({ portal }) {
   const navigate = useNavigate();
   const config = roleEntryConfig[portal] || roleEntryConfig.client;
   const Icon = config.icon;
+  const apiMode = getPreferredRepositoryMode() === 'api';
+  const apiOrigin = getApiOrigin();
+
   const [email, setEmail] = useState(config.email);
   const [sentOtp, setSentOtp] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [authNotice, setAuthNotice] = useState('');
   const [sentAt, setSentAt] = useState(null);
-  const [offlineDemo, setOfflineDemo] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [serverOk, setServerOk] = useState(apiMode ? null : true);
+  const [serverMessage, setServerMessage] = useState('');
 
-  const useApi = getPreferredRepositoryMode() === 'api' && !offlineDemo;
-  const apiOrigin = getApiOrigin();
+  const visibleCode = isOtpCode(sentOtp) ? sentOtp : isOtpCode(otpInput) ? otpInput : '';
+
+  const probeServer = useCallback(async () => {
+    if (!apiMode) {
+      setServerOk(true);
+      return true;
+    }
+    setServerOk(null);
+    setServerMessage('מתעורר/בודק חיבור לשרver… (עד ~45 שניות ב-Free tier)');
+    const health = await checkApiHealth();
+    setServerOk(health.ok);
+    setServerMessage(health.ok ? 'מחובר לשרver Render' : health.message);
+    return health.ok;
+  }, [apiMode]);
 
   const startLocalOtp = (notice) => {
     const code = createOtp();
-    setOfflineDemo(true);
     setSentOtp(code);
-    setOtpInput('');
+    setOtpInput(code);
     setSentAt(Date.now());
-    setAuthNotice(notice || 'מצב דמו מקומי — הקוד מוצג למטה (ללא שרת).');
+    setAuthNotice(notice || 'מצב דemo מקומי — הקוד מוצג למטה.');
     setAuthError('');
+    return code;
   };
 
-  const sendEmailOtp = async () => {
-    if (!email.includes('@')) {
-      setAuthError('יש להזין כתובת מייל תקינה');
-      return;
-    }
-    setAuthError('');
-    setAuthNotice('');
-    try {
-      if (useApi) {
-        const data = await sendOtp(email, portal);
-        setSentOtp(data.devCode || 'sent');
-        setOtpInput(data.devCode || '');
-        setSentAt(Date.now());
-        if (data.devCode) {
-          setAuthNotice('קוד מהשרת — הוזן אוטומטית ב-dev.');
-        }
-        return;
-      }
-      startLocalOtp('קוד דמו מקומי — הזינו את הקוד המוצג למטה.');
-    } catch (err) {
-      if (isNetworkFetchError(err) || err?.network) {
-        startLocalOtp('השרת לא זמין — עברנו למצb דמו מקומי. הקוד מוצג למטה.');
-        return;
-      }
-      setAuthError(formatShareChargeApiError(err, 'otp'));
-    }
-  };
-
-  const verifyEmailOtp = async () => {
-    if (useApi && !sentOtp) {
+  const completeVerify = async (codeOverride) => {
+    const code = String(codeOverride ?? otpInput).trim();
+    if (apiMode && !sentOtp) {
       setAuthError('קודם יש לשלוח קוד OTP');
-      return;
+      return false;
     }
-    if (!useApi && !sentOtp) {
+    if (!apiMode && !sentOtp) {
       setAuthError('קודם יש לשלוח קוד למייל');
-      return;
+      return false;
     }
+    if (!code) {
+      setAuthError('יש להזין את קוד האימות');
+      return false;
+    }
+
     setAuthError('');
     try {
-      if (useApi) {
-        if (!otpInput.trim()) {
-          setAuthError('יש להזין את קוד האימות');
-          return;
-        }
-        const data = await verifyOtp(email, portal, otpInput.trim());
+      if (apiMode) {
+        const data = await verifyOtp(email, portal, code);
         setAuthSession(portal, {
           verified: true,
           email: data.user?.email || email,
@@ -91,23 +92,9 @@ export function ShareChargeRoleEntry({ portal }) {
           token: data.token,
         });
       } else {
-        if (otpInput.trim() !== sentOtp) {
+        if (code !== sentOtp) {
           setAuthError('קוד שגוי. נסה שוב או שלח קוד חדש');
-          return;
-        }
-        setAuthSession(portal, {
-          verified: true,
-          email,
-          verifiedAt: Date.now(),
-          offlineDemo: offlineDemo || undefined,
-        });
-      }
-      navigate(portalPaths[portal], { replace: true });
-    } catch (err) {
-      if ((isNetworkFetchError(err) || err?.network) && sentOtp) {
-        if (otpInput.trim() !== sentOtp) {
-          setAuthError('קוד שגוי. נסה שוב או שלח קוד חדש');
-          return;
+          return false;
         }
         setAuthSession(portal, {
           verified: true,
@@ -115,10 +102,59 @@ export function ShareChargeRoleEntry({ portal }) {
           verifiedAt: Date.now(),
           offlineDemo: true,
         });
-        navigate(portalPaths[portal], { replace: true });
+      }
+      navigate(portalPaths[portal], { replace: true });
+      return true;
+    } catch (err) {
+      setAuthError(formatShareChargeApiError(err, 'verify'));
+      return false;
+    }
+  };
+
+  const verifyEmailOtp = async () => {
+    setBusy(true);
+    try {
+      await completeVerify();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendEmailOtp = async () => {
+    if (!email.includes('@')) {
+      setAuthError('יש להזין כתובת מייל תקינה');
+      return;
+    }
+    setBusy(true);
+    setAuthError('');
+    setAuthNotice('');
+    try {
+      if (apiMode) {
+        const reachable = serverOk === true ? true : await probeServer();
+        if (!reachable) {
+          setAuthError(serverMessage || 'השרver לא זמין — לא עוברים למצב דemo.');
+          return;
+        }
+        const data = await sendOtp(email, portal);
+        const code = data.devCode || '';
+        setSentOtp(code || 'sent');
+        setOtpInput(code);
+        setSentAt(Date.now());
+        if (isOtpCode(code)) {
+          setAuthNotice('קוד מהשרver — מאמתים אוטומטית…');
+          const ok = await completeVerify(code);
+          if (ok) return;
+          setAuthNotice('הקוד התקבל — לחצו «אימות» אם לא נכנסתם אוטומטית.');
+          return;
+        }
+        setAuthNotice('הקוד נשלח — הזינו את הקוד מהמייל ולחצו «אימות».');
         return;
       }
-      setAuthError(formatShareChargeApiError(err, 'verify'));
+      startLocalOtp('קוד דemo מקומי — לחצו «אימות» עם הקוד למטה.');
+    } catch (err) {
+      setAuthError(formatShareChargeApiError(err, 'otp'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -128,6 +164,10 @@ export function ShareChargeRoleEntry({ portal }) {
       navigate(portalPaths[portal], { replace: true });
     }
   }, [portal, navigate]);
+
+  useEffect(() => {
+    if (apiMode) probeServer();
+  }, [apiMode, probeServer]);
 
   return (
     <div dir="rtl" className="sc-skin sc-no-motion min-h-screen bg-[var(--sc-bg)] text-sc-text">
@@ -168,26 +208,37 @@ export function ShareChargeRoleEntry({ portal }) {
             </div>
             <h1 className="text-3xl font-black tracking-tight">{config.title}</h1>
             <p className="mx-auto mt-2 max-w-xs text-sm leading-7 text-sc-muted">{config.subtitle}</p>
-            <div className="mt-5 grid gap-2">
-              {config.points.map((point) => (
-                <div
-                  key={point}
-                  className="flex items-center gap-2 rounded-sc-sm border border-sc-border bg-sc-surface px-4 py-3 text-sm font-bold text-sc-text"
-                >
-                  <CheckCircle size={17} className="shrink-0 text-[var(--sc-accent)]" />
-                  <span className="text-right">{point}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 
         <div className="relative z-10 space-y-3">
-          {useApi && apiOrigin ? (
-            <p className="rounded-sc-sm border border-sc-border bg-white/80 px-3 py-2 text-[11px] font-bold leading-6 text-sc-muted">
-              שרת API: <span dir="ltr">{apiOrigin}</span>
-            </p>
+          {apiMode && apiOrigin ? (
+            <div
+              className={`rounded-sc-sm border px-3 py-2 text-[11px] font-bold leading-6 ${
+                serverOk === true
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : serverOk === false
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : 'border-amber-200 bg-amber-50 text-amber-800'
+              }`}
+            >
+              <p>
+                שרת API: <span dir="ltr">{apiOrigin}</span>
+              </p>
+              <p className="mt-1">{serverMessage || 'בודק…'}</p>
+              {serverOk === false ? (
+                <button
+                  type="button"
+                  onClick={() => probeServer()}
+                  disabled={busy || serverOk === null}
+                  className="mt-2 rounded-sc-sm bg-white px-3 py-1 text-xs font-black text-red-700 shadow-sm disabled:opacity-60"
+                >
+                  נסה שוב
+                </button>
+              ) : null}
+            </div>
           ) : null}
+
           <div className="rounded-sc-lg border border-sc-border bg-white p-4 shadow-sc-card">
             <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">קוד אימות</p>
             <label className="text-xs font-bold text-sc-muted">
@@ -198,28 +249,31 @@ export function ShareChargeRoleEntry({ portal }) {
                 className="sc-field text-right text-sm"
                 inputMode="email"
                 dir="ltr"
+                disabled={busy}
               />
             </label>
-            <button type="button" onClick={sendEmailOtp} className="sc-btn-primary mt-3 !text-sm">
-              שלח קוד OTP
+            <button
+              type="button"
+              onClick={sendEmailOtp}
+              disabled={busy || (apiMode && serverOk === false)}
+              className="sc-btn-primary mt-3 !text-sm disabled:opacity-60"
+            >
+              {busy ? 'שולח…' : 'שלח קוד OTP'}
             </button>
 
-            {useApi && sentOtp ? (
-              <p className="mt-2 text-xs text-sc-muted">הקוד נשלח — בדוק לוג שרver ב-dev או הזן את הקוד מהמייל.</p>
-            ) : null}
-            {!useApi && sentOtp ? (
+            {visibleCode ? (
               <div className="mt-3 rounded-sc-sm border border-sc-border bg-sc-surface p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-sc-muted">נשלח אליכם</p>
+                    <p className="text-xs font-bold text-sc-muted">קוד לכניסה</p>
                     <p className="truncate text-sm font-black">{email}</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-[var(--sc-accent)] px-3 py-1 text-xs font-black text-white">
                     {sentAt ? shortTime(sentAt) : ''}
                   </span>
                 </div>
-                <p className="mt-2 text-xs text-sc-muted">קוד הכניסה:</p>
-                <p className="mt-1 font-mono text-3xl font-black tracking-[0.28em] text-[var(--sc-accent)]">{sentOtp}</p>
+                <p className="mt-2 text-xs text-sc-muted">{apiMode ? 'קוד מהשרver:' : 'קוד דemo:'}</p>
+                <p className="mt-1 font-mono text-3xl font-black tracking-[0.28em] text-[var(--sc-accent)]">{visibleCode}</p>
               </div>
             ) : null}
 
@@ -232,13 +286,15 @@ export function ShareChargeRoleEntry({ portal }) {
                 inputMode="numeric"
                 maxLength={4}
                 dir="ltr"
+                disabled={busy}
               />
               <button
                 type="button"
                 onClick={verifyEmailOtp}
-                className="self-center rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 px-5 py-3 text-sm font-black text-white shadow-sc-card"
+                disabled={busy}
+                className="self-center rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 px-5 py-3 text-sm font-black text-white shadow-sc-card disabled:opacity-60"
               >
-                אימות
+                {busy ? '…' : 'אימות'}
               </button>
             </div>
             {authNotice && <p className="mt-2 text-sm font-bold text-[var(--sc-accent-2)]">{authNotice}</p>}
@@ -247,7 +303,7 @@ export function ShareChargeRoleEntry({ portal }) {
 
           {isPortalSessionReady(portal) && (
             <p className="text-center text-xs font-bold text-[var(--sc-accent-2)]">
-              כבר מחוברים — המערכת תעביר אתכם אחרי האימות הבא או{' '}
+              כבר מחוברים —{' '}
               <button
                 type="button"
                 className="font-black underline"
