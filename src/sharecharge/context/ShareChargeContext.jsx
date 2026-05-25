@@ -1,8 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { localStorageRepository } from '../data/localStorageRepository';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
+import { isApiMode, loadStateFromApi } from '../data/apiRepository';
+import { sharechargeApi } from '../data/sharechargeApi';
 import { getInitialAppState } from '../state/initialState';
-import { STORAGE_KEY } from '../constants';
+import { STORAGE_KEY, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { createId, createOtp, currency } from '../utils';
 import { loadAuthSessions } from '../auth/session';
 import { ensureDriverUserForEmail } from '../auth/identity';
@@ -15,6 +17,7 @@ function addEvent(draft, text, type = 'activity') {
 }
 
 function getInitialState() {
+  if (isApiMode()) return getInitialAppState();
   try {
     const fromRepo = localStorageRepository.load();
     if (fromRepo && typeof fromRepo === 'object') return fromRepo;
@@ -24,16 +27,55 @@ function getInitialState() {
   return getInitialAppState();
 }
 
+function activePortalForApi() {
+  const app = import.meta.env.VITE_SHARECHARGE_APP;
+  if (app && app !== 'all') return app;
+  const sessions = loadAuthSessions();
+  if (sessions[SHARECHARGE_ROLE_KEYS.system]?.verified) return SHARECHARGE_ROLE_KEYS.system;
+  if (sessions[SHARECHARGE_ROLE_KEYS.provider]?.verified) return SHARECHARGE_ROLE_KEYS.provider;
+  if (sessions[SHARECHARGE_ROLE_KEYS.client]?.verified) return SHARECHARGE_ROLE_KEYS.client;
+  return SHARECHARGE_ROLE_KEYS.client;
+}
+
 export function ShareChargeProvider({ children }) {
   const repositoryMode = getPreferredRepositoryMode();
+  const useApi = repositoryMode === 'api';
 
   const [state, setState] = useState(() => getInitialState());
+  const [loading, setLoading] = useState(useApi);
+  const [syncError, setSyncError] = useState(null);
+
+  const refreshFromApi = useCallback(async (portal = activePortalForApi()) => {
+    if (!useApi) return;
+    try {
+      setSyncError(null);
+      const next = await loadStateFromApi(portal);
+      setState(next);
+    } catch (err) {
+      console.error('ShareCharge API sync failed', err);
+      setSyncError(err.message || 'Sync failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [useApi]);
 
   useEffect(() => {
+    if (useApi) {
+      refreshFromApi();
+      const id = setInterval(() => refreshFromApi(), 15000);
+      return () => clearInterval(id);
+    }
+    return undefined;
+  }, [useApi, refreshFromApi]);
+
+  useEffect(() => {
+    if (useApi) return undefined;
     localStorageRepository.save(state);
-  }, [state]);
+    return undefined;
+  }, [state, useApi]);
 
   useEffect(() => {
+    if (useApi) return undefined;
     const syncFromStorage = (event) => {
       if (event.key !== STORAGE_KEY || !event.newValue) return;
       try {
@@ -44,7 +86,7 @@ export function ShareChargeProvider({ children }) {
     };
     window.addEventListener('storage', syncFromStorage);
     return () => window.removeEventListener('storage', syncFromStorage);
-  }, []);
+  }, [useApi]);
 
   const update = (producer) => {
     setState((current) => {
@@ -54,18 +96,48 @@ export function ShareChargeProvider({ children }) {
     });
   };
 
+  const afterApi = async (portal, fn) => {
+    await fn();
+    await refreshFromApi(portal);
+  };
+
   const value = useMemo(
     () => ({
       repositoryMode,
+      loading,
+      syncError,
+      refreshFromApi,
       state,
-      reset: () => setState(getInitialAppState()),
-      syncSessionProfiles: () => update((draft) => {
-        const s = loadAuthSessions();
-        if (s.client?.verified && s.client?.email) {
-          ensureDriverUserForEmail(draft, s.client.email);
+      reset: async () => {
+        if (useApi) {
+          await sharechargeApi.reset(SHARECHARGE_ROLE_KEYS.system);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.system);
+        } else {
+          setState(getInitialAppState());
         }
-      }),
-      createBooking: ({ stationId, startTime, durationHours }) => {
+      },
+      syncSessionProfiles: () => {
+        if (useApi) {
+          refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return;
+        }
+        update((draft) => {
+          const s = loadAuthSessions();
+          if (s.client?.verified && s.client?.email) {
+            ensureDriverUserForEmail(draft, s.client.email);
+          }
+        });
+      },
+      createBooking: async ({ stationId, startTime, durationHours }) => {
+        if (useApi) {
+          const { booking } = await sharechargeApi.createBooking(SHARECHARGE_ROLE_KEYS.client, {
+            stationId,
+            startTime,
+            durationHours,
+          });
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return booking?.id || '';
+        }
         let bookingId = '';
         update((draft) => {
           const station = draft.stations.find((item) => item.id === stationId);
@@ -96,30 +168,48 @@ export function ShareChargeProvider({ children }) {
         });
         return bookingId;
       },
-      approveBooking: (bookingId) => update((draft) => {
-        const booking = draft.bookings.find((item) => item.id === bookingId);
-        if (!booking) return;
-        booking.status = 'approved';
-        booking.approvedAt = Date.now();
-        addEvent(draft, 'הספק אישר בקשת טעינה');
-      }),
-      rejectBooking: (bookingId) => update((draft) => {
-        const booking = draft.bookings.find((item) => item.id === bookingId);
-        if (!booking) return;
-        booking.status = 'rejected';
-        booking.rejectedAt = Date.now();
-        addEvent(draft, 'הספק דחה בקשת טעינה', 'warning');
-      }),
-      markOnWay: (bookingId) => update((draft) => {
-        const booking = draft.bookings.find((item) => item.id === bookingId);
-        if (!booking) return;
-        booking.status = 'on_way';
-        booking.otp = createOtp();
-        booking.onWayAt = Date.now();
-        booking.otpExpiresAt = Date.now() + draft.settings.otpWindowMinutes * 60 * 1000;
-        addEvent(draft, `הנהג בדרך. נוצר קוד OTP ${booking.otp}`);
-      }),
-      verifyOtp: (bookingId, otp) => {
+      approveBooking: async (bookingId) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.provider, () => sharechargeApi.approveBooking(SHARECHARGE_ROLE_KEYS.provider, bookingId));
+        return update((draft) => {
+          const booking = draft.bookings.find((item) => item.id === bookingId);
+          if (!booking) return;
+          booking.status = 'approved';
+          booking.approvedAt = Date.now();
+          addEvent(draft, 'הספק אישר בקשת טעינה');
+        });
+      },
+      rejectBooking: async (bookingId) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.provider, () => sharechargeApi.rejectBooking(SHARECHARGE_ROLE_KEYS.provider, bookingId));
+        return update((draft) => {
+          const booking = draft.bookings.find((item) => item.id === bookingId);
+          if (!booking) return;
+          booking.status = 'rejected';
+          booking.rejectedAt = Date.now();
+          addEvent(draft, 'הספק דחה בקשת טעינה', 'warning');
+        });
+      },
+      markOnWay: async (bookingId) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.client, () => sharechargeApi.markOnWay(SHARECHARGE_ROLE_KEYS.client, bookingId));
+        return update((draft) => {
+          const booking = draft.bookings.find((item) => item.id === bookingId);
+          if (!booking) return;
+          booking.status = 'on_way';
+          booking.otp = createOtp();
+          booking.onWayAt = Date.now();
+          booking.otpExpiresAt = Date.now() + draft.settings.otpWindowMinutes * 60 * 1000;
+          addEvent(draft, `הנהג בדרך. נוצר קוד OTP ${booking.otp}`);
+        });
+      },
+      verifyOtp: async (bookingId, otp) => {
+        if (useApi) {
+          try {
+            const { ok } = await sharechargeApi.verifyOtpBooking(SHARECHARGE_ROLE_KEYS.provider, bookingId, otp);
+            await refreshFromApi(SHARECHARGE_ROLE_KEYS.provider);
+            return ok;
+          } catch {
+            return false;
+          }
+        }
         let ok = false;
         update((draft) => {
           const booking = draft.bookings.find((item) => item.id === bookingId);
@@ -132,121 +222,149 @@ export function ShareChargeProvider({ children }) {
         });
         return ok;
       },
-      driverStartCharge: (bookingId) => update((draft) => {
-        const booking = draft.bookings.find((item) => item.id === bookingId);
-        if (!booking || booking.status !== 'otp_verified') return;
-        booking.status = 'charging';
-        booking.driverConfirmedStart = true;
-        booking.startedAt = Date.now();
-        addEvent(draft, 'הנהג אישר התחלת טעינה');
-      }),
-      finishCharge: (bookingId, kwh) => update((draft) => {
-        const booking = draft.bookings.find((item) => item.id === bookingId);
-        if (!booking || booking.status !== 'charging') return;
-        const station = draft.stations.find((item) => item.id === booking.stationId);
-        const amount = Number((kwh * station.pricePerKwh).toFixed(2));
-        const platformFee = Number((amount * draft.settings.commission / 100).toFixed(2));
-        const hostShare = Number((amount - platformFee).toFixed(2));
-        booking.status = 'completed';
-        booking.completedAt = Date.now();
-        booking.kwh = kwh;
-        booking.amount = amount;
-        booking.platformFee = platformFee;
-        booking.hostShare = hostShare;
-        draft.transactions.unshift({
-          id: createId('tx'),
-          bookingId,
-          stationId: station.id,
-          driverId: booking.driverId,
-          hostId: booking.hostId,
-          amount,
-          hostShare,
-          platformFee,
-          kwh,
-          status: 'paid_mock',
-          createdAt: Date.now(),
+      driverStartCharge: async (bookingId) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.client, () => sharechargeApi.driverStartCharge(SHARECHARGE_ROLE_KEYS.client, bookingId));
+        return update((draft) => {
+          const booking = draft.bookings.find((item) => item.id === bookingId);
+          if (!booking || booking.status !== 'otp_verified') return;
+          booking.status = 'charging';
+          booking.driverConfirmedStart = true;
+          booking.startedAt = Date.now();
+          addEvent(draft, 'הנהג אישר התחלת טעינה');
         });
-        addEvent(draft, `טעינה הסתיימה · חויב סך ${currency(amount)}`);
-      }),
-      updateStation: (stationId, patch) => update((draft) => {
-        const station = draft.stations.find((item) => item.id === stationId);
-        if (!station) return;
-        Object.assign(station, patch);
-        addEvent(draft, 'הספק עדכן פרטי עמדה');
-      }),
-      addStation: (stationData) => update((draft) => {
-        const host = draft.users.find((user) => user.id === stationData.hostId);
-        draft.stations.unshift({
-          id: createId('station'),
-          hostId: stationData.hostId,
-          name: stationData.name,
-          address: stationData.address,
-          lat: stationData.lat != null ? Number(stationData.lat) : 32.08,
-          lng: stationData.lng != null ? Number(stationData.lng) : 34.78,
-          distance: Number(stationData.distance || 1),
-          power: Number(stationData.power || 11),
-          plug: stationData.plug || 'Type 2',
-          pricePerKwh: Number(stationData.pricePerKwh || 1.25),
-          available: true,
-          rating: 5,
-          photos: 0,
-          termsText: stationData.termsText || '',
-          createdAt: Date.now(),
+      },
+      finishCharge: async (bookingId, kwh) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.provider, () => sharechargeApi.finishCharge(SHARECHARGE_ROLE_KEYS.provider, bookingId, kwh));
+        return update((draft) => {
+          const booking = draft.bookings.find((item) => item.id === bookingId);
+          if (!booking || booking.status !== 'charging') return;
+          const station = draft.stations.find((item) => item.id === booking.stationId);
+          const amount = Number((kwh * station.pricePerKwh).toFixed(2));
+          const platformFee = Number((amount * draft.settings.commission / 100).toFixed(2));
+          const hostShare = Number((amount - platformFee).toFixed(2));
+          booking.status = 'completed';
+          booking.completedAt = Date.now();
+          booking.kwh = kwh;
+          booking.amount = amount;
+          booking.platformFee = platformFee;
+          booking.hostShare = hostShare;
+          draft.transactions.unshift({
+            id: createId('tx'),
+            bookingId,
+            stationId: station.id,
+            driverId: booking.driverId,
+            hostId: booking.hostId,
+            amount,
+            hostShare,
+            platformFee,
+            kwh,
+            status: 'paid_mock',
+            createdAt: Date.now(),
+          });
+          addEvent(draft, `טעינה הסתיימה · חויב סך ${currency(amount)}`);
         });
-        addEvent(draft, `מנהל הוסיף עמדה חדשה${host ? ` עבור ${host.name}` : ''}`);
-      }),
-      addHost: (hostData) => update((draft) => {
-        const hostId = createId('host');
-        draft.users.unshift({
-          id: hostId,
-          name: hostData.name,
-          email: hostData.email,
-          role: 'host',
-          verified: true,
-          blocked: false,
-          revenue: 0,
-          createdAt: Date.now(),
+      },
+      updateStation: async (stationId, patch) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.provider, () => sharechargeApi.updateStation(SHARECHARGE_ROLE_KEYS.provider, stationId, patch));
+        return update((draft) => {
+          const station = draft.stations.find((item) => item.id === stationId);
+          if (!station) return;
+          Object.assign(station, patch);
+          addEvent(draft, 'הספק עדכן פרטי עמדה');
         });
-        addEvent(draft, `מנהל הוסיף ספק חדש: ${hostData.name}`);
-      }),
-      addDriver: (driverData) => update((draft) => {
-        const id = createId('driver');
-        draft.users.unshift({
-          id,
-          name: driverData.name,
-          email: driverData.email,
-          role: 'driver',
-          verified: true,
-          blocked: false,
-          spend: 0,
-          createdAt: Date.now(),
+      },
+      addStation: async (stationData) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.addStation(SHARECHARGE_ROLE_KEYS.system, stationData));
+        return update((draft) => {
+          const host = draft.users.find((user) => user.id === stationData.hostId);
+          draft.stations.unshift({
+            id: createId('station'),
+            hostId: stationData.hostId,
+            name: stationData.name,
+            address: stationData.address,
+            lat: stationData.lat != null ? Number(stationData.lat) : 32.08,
+            lng: stationData.lng != null ? Number(stationData.lng) : 34.78,
+            distance: Number(stationData.distance || 1),
+            power: Number(stationData.power || 11),
+            plug: stationData.plug || 'Type 2',
+            pricePerKwh: Number(stationData.pricePerKwh || 1.25),
+            available: true,
+            rating: 5,
+            photos: 0,
+            termsText: stationData.termsText || '',
+            createdAt: Date.now(),
+          });
+          addEvent(draft, `מנהל הוסיף עמדה חדשה${host ? ` עבור ${host.name}` : ''}`);
         });
-        addEvent(draft, `מנהל הוסיף לקוח: ${driverData.name}`);
-      }),
-      openDispute: (bookingId, reason) => update((draft) => {
-        if (draft.disputes.some((item) => item.bookingId === bookingId && item.status === 'open')) return;
-        draft.disputes.unshift({ id: createId('dispute'), bookingId, reason, status: 'open', createdAt: Date.now() });
-        addEvent(draft, 'נפתחה מחלוקת לטיפול מנהל', 'warning');
-      }),
-      resolveDispute: (disputeId) => update((draft) => {
-        const dispute = draft.disputes.find((item) => item.id === disputeId);
-        if (!dispute) return;
-        dispute.status = 'resolved';
-        dispute.resolvedAt = Date.now();
-        addEvent(draft, 'מנהל סגר מחלוקת');
-      }),
-      toggleBlockUser: (userId) => update((draft) => {
-        const user = draft.users.find((item) => item.id === userId);
-        if (!user) return;
-        user.blocked = !user.blocked;
-        addEvent(draft, `${user.name} ${user.blocked ? 'נחסם' : 'שוחרר מחסימה'}`, 'security');
-      }),
-      setCommission: (commission) => update((draft) => {
-        draft.settings.commission = Number(commission);
-        addEvent(draft, `עמלת המיזם עודכנה ל-${commission}%`);
-      }),
+      },
+      addHost: async (hostData) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.addHost(SHARECHARGE_ROLE_KEYS.system, hostData));
+        return update((draft) => {
+          draft.users.unshift({
+            id: createId('host'),
+            name: hostData.name,
+            email: hostData.email,
+            role: 'host',
+            verified: true,
+            blocked: false,
+            revenue: 0,
+            createdAt: Date.now(),
+          });
+          addEvent(draft, `מנהל הוסיף ספק חדש: ${hostData.name}`);
+        });
+      },
+      addDriver: async (driverData) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.addDriver(SHARECHARGE_ROLE_KEYS.system, driverData));
+        return update((draft) => {
+          draft.users.unshift({
+            id: createId('driver'),
+            name: driverData.name,
+            email: driverData.email,
+            role: 'driver',
+            verified: true,
+            blocked: false,
+            spend: 0,
+            createdAt: Date.now(),
+          });
+          addEvent(draft, `מנהל הוסיף לקוח: ${driverData.name}`);
+        });
+      },
+      openDispute: async (bookingId, reason) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.client, () => sharechargeApi.openDispute(SHARECHARGE_ROLE_KEYS.client, bookingId, reason));
+        return update((draft) => {
+          if (draft.disputes.some((item) => item.bookingId === bookingId && item.status === 'open')) return;
+          draft.disputes.unshift({ id: createId('dispute'), bookingId, reason, status: 'open', createdAt: Date.now() });
+          addEvent(draft, 'נפתחה מחלוקת לטיפול מנהל', 'warning');
+        });
+      },
+      resolveDispute: async (disputeId) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.resolveDispute(SHARECHARGE_ROLE_KEYS.system, disputeId));
+        return update((draft) => {
+          const dispute = draft.disputes.find((item) => item.id === disputeId);
+          if (!dispute) return;
+          dispute.status = 'resolved';
+          dispute.resolvedAt = Date.now();
+          addEvent(draft, 'מנהל סגר מחלוקת');
+        });
+      },
+      toggleBlockUser: async (userId) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.toggleBlockUser(SHARECHARGE_ROLE_KEYS.system, userId));
+        return update((draft) => {
+          const user = draft.users.find((item) => item.id === userId);
+          if (!user) return;
+          user.blocked = !user.blocked;
+          addEvent(draft, `${user.name} ${user.blocked ? 'נחסם' : 'שוחרר מחסימה'}`, 'security');
+        });
+      },
+      setCommission: async (commission) => {
+        if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.setCommission(SHARECHARGE_ROLE_KEYS.system, commission));
+        return update((draft) => {
+          draft.settings.commission = Number(commission);
+          addEvent(draft, `עמלת המיזם עודכנה ל-${commission}%`);
+        });
+      },
     }),
-    [state],
+    [state, loading, syncError, refreshFromApi, repositoryMode, useApi],
   );
 
   return <ShareChargeContext.Provider value={value}>{children}</ShareChargeContext.Provider>;

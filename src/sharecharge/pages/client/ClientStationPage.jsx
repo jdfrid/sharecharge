@@ -19,8 +19,8 @@ export function ClientStationPage() {
 
   const host = state.users.find((u) => u.id === station.hostId);
 
-  const handleConfirm = () => {
-    createBooking({ stationId: station.id, startTime: selectedTime, durationHours });
+  const handleConfirm = async () => {
+    await createBooking({ stationId: station.id, startTime: selectedTime, durationHours });
     navigate('/client/activity', { replace: true });
   };
 

@@ -1,10 +1,19 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ShareChargeProvider } from '../context/ShareChargeContext';
+import { ShareChargeSplash } from '../components/ShareChargeSplash';
+import { SyncStatusBar } from '../components/SyncStatusBar';
 
 export function ShareChargeLayout() {
+  const [splashDone, setSplashDone] = useState(false);
+
   return (
     <ShareChargeProvider>
-      <Outlet />
+      {!splashDone && <ShareChargeSplash onDone={() => setSplashDone(true)} />}
+      <div className={splashDone ? 'sc-app-ready' : 'sc-app-loading'}>
+        <SyncStatusBar />
+        <Outlet />
+      </div>
     </ShareChargeProvider>
   );
 }

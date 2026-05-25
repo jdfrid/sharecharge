@@ -1,0 +1,40 @@
+name: ShareCharge Android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [client, provider, ops]
+        include:
+          - flavor: client
+            gradle_task: assembleClientRelease
+          - flavor: provider
+            gradle_task: assembleProviderRelease
+          - flavor: ops
+            gradle_task: assembleOpsRelease
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: node scripts/prepare-capacitor-flavor.js ${{ matrix.flavor }}
+      - run: npm run build:${{ matrix.flavor }}
+      - run: npx cap add android || true
+      - run: npx cap sync android
+      - run: node scripts/configure-android-flavors.js
+      - run: cd android && chmod +x gradlew && ./gradlew ${{ matrix.gradle_task }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharecharge-${{ matrix.flavor }}-apk
+          path: android/app/build/outputs/apk/**/release/*.apk

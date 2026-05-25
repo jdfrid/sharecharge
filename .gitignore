@@ -1,1 +1,8 @@
 node_modules
+android/local.properties
+android/app/build/
+android/.gradle/
+.env.*.local
+release/apk/*.apk
+server/node_modules
+dist/

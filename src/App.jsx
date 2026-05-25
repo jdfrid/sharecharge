@@ -21,6 +21,7 @@ import ShareChargeLegacyRedirect from './pages/ShareChargeLegacyRedirect';
 import { ShareChargeLayout } from './sharecharge/routes/ShareChargeLayout';
 import { ClientGate, OpsGate, ProviderGate } from './sharecharge/routes/gates';
 import { SHARECHARGE_ROLE_KEYS } from './sharecharge/constants';
+import { appEntryPath, isSingleAppBuild, SHARECHARGE_APP } from './sharecharge/config/appConfig';
 import { ShareChargeHub } from './sharecharge/pages/ShareChargeHub';
 import { ShareChargeRoleEntry } from './sharecharge/pages/ShareChargeRoleEntry';
 import { ClientShell, OpsShell, ProviderShell } from './sharecharge/pages/shells/AppShells';
@@ -54,18 +55,18 @@ function ProtectedRoute({ children, roles }) {
   return children;
 }
 
-function App() {
+function ShareChargeAppRoutes() {
+  const showClient = SHARECHARGE_APP === 'all' || SHARECHARGE_APP === 'client';
+  const showProvider = SHARECHARGE_APP === 'all' || SHARECHARGE_APP === 'provider';
+  const showOps = SHARECHARGE_APP === 'all' || SHARECHARGE_APP === 'ops';
+
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Navigate to="/sharecharge" replace />} />
+    <>
+      {!isSingleAppBuild && <Route path="/sharecharge" element={<ShareChargeHub />} />}
 
-        <Route element={<ShareChargeLayout />}>
-          <Route path="/sharecharge" element={<ShareChargeHub />} />
+      {showClient && (
+        <>
           <Route path="/client/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.client} />} />
-          <Route path="/provider/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.provider} />} />
-          <Route path="/ops/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.system} />} />
-
           <Route element={<ClientGate />}>
             <Route element={<ClientShell />}>
               <Route path="/client" element={<Navigate to="/client/discover" replace />} />
@@ -74,7 +75,12 @@ function App() {
               <Route path="/client/activity" element={<ClientActivityPage />} />
             </Route>
           </Route>
+        </>
+      )}
 
+      {showProvider && (
+        <>
+          <Route path="/provider/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.provider} />} />
           <Route element={<ProviderGate />}>
             <Route element={<ProviderShell />}>
               <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
@@ -83,38 +89,65 @@ function App() {
               <Route path="/provider/transactions" element={<ProviderTransactionsPage />} />
             </Route>
           </Route>
+        </>
+      )}
 
+      {showOps && (
+        <>
+          <Route path="/ops/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.system} />} />
           <Route element={<OpsGate />}>
             <Route element={<OpsShell />}>
               <Route path="/ops" element={<Navigate to="/ops/dashboard" replace />} />
               <Route path="/ops/dashboard" element={<OpsDashboardPage />} />
             </Route>
           </Route>
+        </>
+      )}
+    </>
+  );
+}
+
+function App() {
+  const rootPath = isSingleAppBuild ? appEntryPath : '/sharecharge';
+  const includeDealsAdmin = !isSingleAppBuild;
+
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<Navigate to={rootPath} replace />} />
+
+        <Route element={<ShareChargeLayout />}>
+          <ShareChargeAppRoutes />
         </Route>
 
-        <Route path="/app" element={<Navigate to="/sharecharge" replace />} />
+        <Route path="/app" element={<Navigate to={rootPath} replace />} />
         <Route path="/app/:role" element={<ShareChargeLegacyRedirect />} />
 
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
-          <Route path="deals" element={<DealsManager />} />
-          <Route path="categories" element={<CategoriesManager />} />
-          <Route path="users" element={<ProtectedRoute roles={['admin']}><UsersManager /></ProtectedRoute>} />
-          <Route path="rules" element={<ProtectedRoute roles={['admin']}><RulesManager /></ProtectedRoute>} />
-          <Route path="logs" element={<ProtectedRoute roles={['admin']}><LogsViewer /></ProtectedRoute>} />
-          <Route path="providers" element={<ProtectedRoute roles={['admin']}><ProvidersManager /></ProtectedRoute>} />
-          <Route path="analytics" element={<ProtectedRoute roles={['admin']}><AnalyticsPage /></ProtectedRoute>} />
-          <Route path="settings" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
-          <Route path="messages" element={<ProtectedRoute roles={['admin']}><MessagesPage /></ProtectedRoute>} />
-          <Route path="earnings" element={<ProtectedRoute roles={['admin']}><EarningsPage /></ProtectedRoute>} />
-          <Route path="banners" element={<ProtectedRoute roles={['admin']}><BannersGallery /></ProtectedRoute>} />
-          <Route path="social" element={<ProtectedRoute roles={['admin']}><SocialHub /></ProtectedRoute>} />
-          <Route path="telegram" element={<ProtectedRoute roles={['admin']}><TelegramChannels /></ProtectedRoute>} />
-          <Route path="video-studio" element={<ProtectedRoute roles={['admin', 'editor']}><TikTokStudio /></ProtectedRoute>} />
-          <Route path="tiktok" element={<ProtectedRoute roles={['admin', 'editor']}><TikTokStudio /></ProtectedRoute>} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {includeDealsAdmin && (
+          <>
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+              <Route index element={<Dashboard />} />
+              <Route path="deals" element={<DealsManager />} />
+              <Route path="categories" element={<CategoriesManager />} />
+              <Route path="users" element={<ProtectedRoute roles={['admin']}><UsersManager /></ProtectedRoute>} />
+              <Route path="rules" element={<ProtectedRoute roles={['admin']}><RulesManager /></ProtectedRoute>} />
+              <Route path="logs" element={<ProtectedRoute roles={['admin']}><LogsViewer /></ProtectedRoute>} />
+              <Route path="providers" element={<ProtectedRoute roles={['admin']}><ProvidersManager /></ProtectedRoute>} />
+              <Route path="analytics" element={<ProtectedRoute roles={['admin']}><AnalyticsPage /></ProtectedRoute>} />
+              <Route path="settings" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
+              <Route path="messages" element={<ProtectedRoute roles={['admin']}><MessagesPage /></ProtectedRoute>} />
+              <Route path="earnings" element={<ProtectedRoute roles={['admin']}><EarningsPage /></ProtectedRoute>} />
+              <Route path="banners" element={<ProtectedRoute roles={['admin']}><BannersGallery /></ProtectedRoute>} />
+              <Route path="social" element={<ProtectedRoute roles={['admin']}><SocialHub /></ProtectedRoute>} />
+              <Route path="telegram" element={<ProtectedRoute roles={['admin']}><TelegramChannels /></ProtectedRoute>} />
+              <Route path="video-studio" element={<ProtectedRoute roles={['admin', 'editor']}><TikTokStudio /></ProtectedRoute>} />
+              <Route path="tiktok" element={<ProtectedRoute roles={['admin', 'editor']}><TikTokStudio /></ProtectedRoute>} />
+            </Route>
+          </>
+        )}
+
+        <Route path="*" element={<Navigate to={rootPath} replace />} />
       </Routes>
     </AuthProvider>
   );

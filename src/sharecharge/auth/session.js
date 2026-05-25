@@ -1,4 +1,5 @@
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
+import { clearStoredToken } from '../data/sharechargeApi';
 
 const AUTH_KEY = 'sharecharge-auth-sessions-v2';
 
@@ -47,6 +48,7 @@ export function clearAuthSession(role) {
   const sessions = loadAuthSessions();
   delete sessions[role];
   saveAuthSessions(sessions);
+  clearStoredToken(role);
 }
 
 export function setAuthSession(role, payload) {

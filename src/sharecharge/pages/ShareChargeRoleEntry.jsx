@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import { roleEntryConfig, SHARECHARGE_ROLE_KEYS } from '../constants';
+import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
+import { sendOtp, verifyOtp } from '../data/sharechargeApi';
 import { createOtp, shortTime } from '../utils';
 import { clearAuthSession, loadAuthSessions, setAuthSession } from '../auth/session';
+import { isSingleAppBuild } from '../config/appConfig';
 
 const portalPaths = {
   [SHARECHARGE_ROLE_KEYS.client]: '/client/discover',
@@ -21,29 +24,56 @@ export function ShareChargeRoleEntry({ portal }) {
   const [authError, setAuthError] = useState('');
   const [sentAt, setSentAt] = useState(null);
 
-  const sendEmailOtp = () => {
+  const useApi = getPreferredRepositoryMode() === 'api';
+
+  const sendEmailOtp = async () => {
     if (!email.includes('@')) {
       setAuthError('יש להזין כתובת מייל תקינה');
       return;
     }
-    setSentOtp(createOtp());
-    setOtpInput('');
     setAuthError('');
-    setSentAt(Date.now());
+    try {
+      if (useApi) {
+        const data = await sendOtp(email, portal);
+        setSentOtp(data.devCode || 'sent');
+        setOtpInput(data.devCode || '');
+      } else {
+        const code = createOtp();
+        setSentOtp(code);
+        setOtpInput('');
+      }
+      setSentAt(Date.now());
+    } catch (err) {
+      setAuthError(err.message || 'שליחת קוד נכשלה');
+    }
   };
 
-  const verifyEmailOtp = () => {
-    if (!sentOtp) {
+  const verifyEmailOtp = async () => {
+    if (!sentOtp && !useApi) {
       setAuthError('קודם יש לשלוח קוד למייל');
       return;
     }
-    if (otpInput.trim() !== sentOtp) {
-      setAuthError('קוד שגוי. נסה שוב או שלח קוד חדש');
-      return;
-    }
     setAuthError('');
-    setAuthSession(portal, { verified: true, email, verifiedAt: Date.now() });
-    navigate(portalPaths[portal], { replace: true });
+    try {
+      if (useApi) {
+        const data = await verifyOtp(email, portal, otpInput.trim());
+        setAuthSession(portal, {
+          verified: true,
+          email: data.user?.email || email,
+          verifiedAt: Date.now(),
+          token: data.token,
+        });
+      } else {
+        if (otpInput.trim() !== sentOtp) {
+          setAuthError('קוד שגוי. נסה שוב או שלח קוד חדש');
+          return;
+        }
+        setAuthSession(portal, { verified: true, email, verifiedAt: Date.now() });
+      }
+      navigate(portalPaths[portal], { replace: true });
+    } catch (err) {
+      setAuthError(err.message || 'אימות נכשל');
+    }
   };
 
   useEffect(() => {
@@ -62,12 +92,16 @@ export function ShareChargeRoleEntry({ portal }) {
         <div className="pointer-events-none absolute -left-20 bottom-32 h-64 w-64 rounded-full bg-[var(--sc-accent-2)]/8 blur-3xl" />
 
         <div className="relative z-10 flex items-center justify-between">
-          <Link
-            to="/sharecharge"
-            className="sc-btn-outline rounded-sc-sm !px-4 !py-2 text-sm !font-black text-[var(--sc-accent)] shadow-sm"
-          >
-            ← בחירת אפליקציה
-          </Link>
+          {!isSingleAppBuild ? (
+            <Link
+              to="/sharecharge"
+              className="sc-btn-outline rounded-sc-sm !px-4 !py-2 text-sm !font-black text-[var(--sc-accent)] shadow-sm"
+            >
+              ← בחירת אפליקציה
+            </Link>
+          ) : (
+            <span />
+          )}
           <span className="rounded-full border border-sc-border bg-white px-3 py-1 text-xs font-black text-[var(--sc-accent-2)] shadow-sm">
             אימות מאובטח
           </span>
@@ -121,7 +155,10 @@ export function ShareChargeRoleEntry({ portal }) {
               שלח קוד OTP
             </button>
 
-            {sentOtp && (
+                {useApi && sentOtp ? (
+                  <p className="mt-2 text-xs text-sc-muted">הקוד נשלח — בדוק לוג שרver ב-dev או הזן את הקוד מהמייל.</p>
+                ) : null}
+                {!useApi && sentOtp ? (
               <div className="mt-3 rounded-sc-sm border border-sc-border bg-sc-surface p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -135,7 +172,7 @@ export function ShareChargeRoleEntry({ portal }) {
                 <p className="mt-2 text-xs text-sc-muted">קוד הכניסה:</p>
                 <p className="mt-1 font-mono text-3xl font-black tracking-[0.28em] text-[var(--sc-accent)]">{sentOtp}</p>
               </div>
-            )}
+            ) : null}
 
             <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
               <input

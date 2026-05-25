@@ -1,0 +1,15 @@
+{
+  "appId": "com.sharecharge.ops",
+  "appName": "ShareCharge ניהול",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Geolocation": {
+      "permissions": [
+        "location"
+      ]
+    }
+  }
+}

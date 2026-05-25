@@ -1,0 +1,224 @@
+import { Router } from 'express';
+import { query } from '../db/pool.js';
+import { authRequired, requireRole } from '../middleware/auth.js';
+import { addEvent, getSettings } from '../services/stateService.js';
+import { createId, createOtp, rowToBooking } from '../utils.js';
+
+const router = Router();
+
+router.get('/', authRequired, async (req, res) => {
+  try {
+    let sql = 'SELECT * FROM bookings';
+    const params = [];
+    if (req.user.role === 'driver') {
+      params.push(req.user.sub);
+      sql += ' WHERE driver_id = $1';
+    } else if (req.user.role === 'host') {
+      params.push(req.user.sub);
+      sql += ' WHERE host_id = $1';
+    }
+    sql += ' ORDER BY created_at DESC';
+    const { rows } = await query(sql, params);
+    res.json({ bookings: rows.map(rowToBooking) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load bookings' });
+  }
+});
+
+router.post('/', authRequired, requireRole('driver'), async (req, res) => {
+  try {
+    const { stationId, startTime, durationHours } = req.body || {};
+    const { rows: stationRows } = await query('SELECT * FROM stations WHERE id = $1', [stationId]);
+    const station = stationRows[0];
+    if (!station || !station.available) return res.status(404).json({ error: 'Station not available' });
+
+    const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.sub]);
+    const driver = userRows[0];
+    const id = createId('booking');
+    const now = Date.now();
+
+    await query(
+      `INSERT INTO bookings (
+        id, station_id, driver_id, driver_email_snapshot, host_id, start_time, duration_hours,
+        status, created_at, notes
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,'[]')`,
+      [
+        id,
+        stationId,
+        driver.id,
+        driver.email,
+        station.host_id,
+        startTime || '19:30',
+        Number(durationHours) || 2,
+        now,
+      ],
+    );
+
+    await addEvent(`הזמנה מ${driver.name} (${driver.email}) → ${station.name}`);
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [id]);
+    res.status(201).json({ booking: rowToBooking(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create booking' });
+  }
+});
+
+router.post('/:id/approve', authRequired, requireRole('host'), async (req, res) => {
+  return patchBooking(req, res, async (booking) => {
+    if (booking.host_id !== req.user.sub) throw forbidden();
+    await query(`UPDATE bookings SET status = 'approved', approved_at = $1 WHERE id = $2`, [Date.now(), booking.id]);
+    await addEvent('הספק אישר בקשת טעינה');
+  });
+});
+
+router.post('/:id/reject', authRequired, requireRole('host'), async (req, res) => {
+  return patchBooking(req, res, async (booking) => {
+    if (booking.host_id !== req.user.sub) throw forbidden();
+    await query(`UPDATE bookings SET status = 'rejected', rejected_at = $1 WHERE id = $2`, [Date.now(), booking.id]);
+    await addEvent('הספק דחה בקשת טעינה', 'warning');
+  });
+});
+
+router.post('/:id/on-way', authRequired, requireRole('driver'), async (req, res) => {
+  return patchBooking(req, res, async (booking) => {
+    if (booking.driver_id !== req.user.sub) throw forbidden();
+    const settings = await getSettings();
+    const otp = createOtp();
+    const expires = Date.now() + settings.otpWindowMinutes * 60 * 1000;
+    await query(
+      `UPDATE bookings SET status = 'on_way', otp = $1, otp_expires_at = $2, on_way_at = $3 WHERE id = $4`,
+      [otp, expires, Date.now(), booking.id],
+    );
+    await addEvent(`הנהג בדרך. נוצר קוד OTP ${otp}`);
+  });
+});
+
+router.post('/:id/verify-otp', authRequired, requireRole('host'), async (req, res) => {
+  try {
+    const { otp } = req.body || {};
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
+    const booking = rows[0];
+    if (!booking) return res.status(404).json({ error: 'Not found' });
+    if (booking.host_id !== req.user.sub) return res.status(403).json({ error: 'Forbidden' });
+    if (booking.otp !== String(otp).trim() || Date.now() > Number(booking.otp_expires_at)) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+    await query(
+      `UPDATE bookings SET status = 'otp_verified', host_confirmed_connection = true, otp_verified_at = $1 WHERE id = $2`,
+      [Date.now(), booking.id],
+    );
+    await addEvent('הספק אימת OTP וחיבור העמדה מוכן');
+    const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
+    res.json({ booking: rowToBooking(updated), ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'OTP verification failed' });
+  }
+});
+
+router.post('/:id/start-charge', authRequired, requireRole('driver'), async (req, res) => {
+  return patchBooking(req, res, async (booking) => {
+    if (booking.driver_id !== req.user.sub) throw forbidden();
+    if (booking.status !== 'otp_verified') throw badRequest('Invalid status');
+    await query(
+      `UPDATE bookings SET status = 'charging', driver_confirmed_start = true, started_at = $1 WHERE id = $2`,
+      [Date.now(), booking.id],
+    );
+    await addEvent('הנהג אישר התחלת טעינה');
+  });
+});
+
+router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) => {
+  try {
+    const { kwh } = req.body || {};
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
+    const booking = rows[0];
+    if (!booking) return res.status(404).json({ error: 'Not found' });
+    if (booking.host_id !== req.user.sub) return res.status(403).json({ error: 'Forbidden' });
+    if (booking.status !== 'charging') return res.status(400).json({ error: 'Not charging' });
+
+    const { rows: stRows } = await query('SELECT * FROM stations WHERE id = $1', [booking.station_id]);
+    const station = stRows[0];
+    const settings = await getSettings();
+    const amount = Number((Number(kwh) * Number(station.price_per_kwh)).toFixed(2));
+    const platformFee = Number((amount * settings.commission / 100).toFixed(2));
+    const hostShare = Number((amount - platformFee).toFixed(2));
+    const now = Date.now();
+
+    await query(
+      `UPDATE bookings SET status = 'completed', completed_at = $1, kwh = $2, amount = $3, host_share = $4, platform_fee = $5 WHERE id = $6`,
+      [now, kwh, amount, hostShare, platformFee, booking.id],
+    );
+
+    const txId = createId('tx');
+    await query(
+      `INSERT INTO transactions (id, booking_id, station_id, driver_id, host_id, amount, host_share, platform_fee, kwh, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'paid_mock',$10)`,
+      [txId, booking.id, station.id, booking.driver_id, booking.host_id, amount, hostShare, platformFee, kwh, now],
+    );
+
+    await addEvent(`טעינה הסתיימה · חויב סך ₪${amount}`);
+    const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
+    res.json({ booking: rowToBooking(updated) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Finish failed' });
+  }
+});
+
+router.post('/:id/dispute', authRequired, async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
+    const booking = rows[0];
+    if (!booking) return res.status(404).json({ error: 'Not found' });
+
+    const { rows: open } = await query(
+      `SELECT id FROM disputes WHERE booking_id = $1 AND status = 'open'`,
+      [booking.id],
+    );
+    if (open[0]) return res.status(409).json({ error: 'Dispute already open' });
+
+    const id = createId('dispute');
+    await query(
+      `INSERT INTO disputes (id, booking_id, reason, status, created_at) VALUES ($1,$2,$3,'open',$4)`,
+      [id, booking.id, reason || 'Dispute', Date.now()],
+    );
+    await addEvent('נפתחה מחלוקת לטיפול מנהל', 'warning');
+    res.status(201).json({ ok: true, id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Dispute failed' });
+  }
+});
+
+async function patchBooking(req, res, fn) {
+  try {
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
+    const booking = rows[0];
+    if (!booking) return res.status(404).json({ error: 'Not found' });
+    await fn(booking);
+    const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
+    res.json({ booking: rowToBooking(updated) });
+  } catch (err) {
+    if (err.code === 'FORBIDDEN') return res.status(403).json({ error: 'Forbidden' });
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Action failed' });
+  }
+}
+
+function forbidden() {
+  const e = new Error('Forbidden');
+  e.code = 'FORBIDDEN';
+  throw e;
+}
+
+function badRequest(msg) {
+  const e = new Error(msg);
+  e.code = 'BAD_REQUEST';
+  throw e;
+}
+
+export default router;

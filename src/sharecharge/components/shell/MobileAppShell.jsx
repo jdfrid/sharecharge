@@ -2,8 +2,8 @@ import { Link, NavLink } from 'react-router-dom';
 import { Zap } from 'lucide-react';
 
 const heroSurface = {
-  client: '',
-  provider: '',
+  client: 'app-hero--client bg-gradient-to-br from-[#e8f4ff] via-[#f0f9ff] to-[#e6fffa] text-sc-text',
+  provider: 'app-hero--provider bg-gradient-to-br from-[#e0f2fe] via-[#ecfeff] to-[#f0fdf4] text-sc-text',
   system: 'app-hero--dark bg-gradient-to-br from-midnight-900 via-midnight-800 to-midnight-950 text-white',
 };
 
