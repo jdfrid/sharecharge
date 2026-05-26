@@ -13,7 +13,10 @@ import { createId, createOtp, PORTAL_TO_ROLE, rowToUser } from '../utils.js';
 const router = Router();
 
 function devOtpEnabled() {
-  return process.env.ALLOW_DEV_OTP === 'true' || process.env.NODE_ENV !== 'production';
+  if (process.env.ALLOW_DEV_OTP === 'true') return true;
+  if (process.env.NODE_ENV !== 'production') return true;
+  if (!process.env.DATABASE_URL) return true;
+  return false;
 }
 
 function respondOtp(res, { email, portal, code }) {

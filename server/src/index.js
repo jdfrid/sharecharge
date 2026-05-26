@@ -124,6 +124,14 @@ if (hasPublic) {
 }
 
 async function boot() {
+  if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL not set — link sharecharge-db in Render Environment.');
+    if (process.env.ALLOW_DEV_OTP !== 'false') {
+      process.env.ALLOW_DEV_OTP = 'true';
+      console.warn('In-memory OTP enabled until DATABASE_URL is linked.');
+    }
+  }
+
   if (process.env.DATABASE_URL && process.env.AUTO_MIGRATE !== 'false') {
     try {
       await migrate();
@@ -134,11 +142,17 @@ async function boot() {
       console.log('Database ready.');
     } catch (err) {
       console.error('DB migrate/seed failed:', err.message);
-      if (process.env.ALLOW_DEV_OTP !== 'true') throw err;
-      console.warn('Continuing with in-memory OTP fallback (ALLOW_DEV_OTP=true).');
+      if (process.env.ALLOW_DEV_OTP !== 'true' && process.env.ALLOW_DEV_OTP !== 'false') {
+        process.env.ALLOW_DEV_OTP = 'true';
+        console.warn('In-memory OTP enabled after migrate failure.');
+      } else if (process.env.ALLOW_DEV_OTP !== 'true') {
+        throw err;
+      } else {
+        console.warn('Continuing with in-memory OTP fallback (ALLOW_DEV_OTP=true).');
+      }
     }
   } else if (!process.env.DATABASE_URL) {
-    console.warn('DATABASE_URL not set — link sharecharge-db in Render.');
+    /* already warned above */
   }
 
   app.listen(PORT, '0.0.0.0', () => {
