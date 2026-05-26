@@ -52,6 +52,18 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,svg,png,webp,jpg,jpeg}'],
+          // Do not serve SPA shell for API routes (e.g. /api/health must return JSON).
+          navigateFallbackDenylist: [/^\/api\//],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/sharecharge\.onrender\.com\/api\//,
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: /\/api\//,
+              handler: 'NetworkOnly',
+            },
+          ],
         },
       }),
     ],

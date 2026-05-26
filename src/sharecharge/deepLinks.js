@@ -2,9 +2,7 @@
 export function shareChargeHashUrl(path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   if (typeof window === 'undefined') return p;
-  const { origin, pathname } = window.location;
-  const base = `${origin}${pathname.replace(/\/$/, '')}`;
-  return `${base}#${p}`;
+  return `${window.location.origin}/#${p}`;
 }
 
 export const SHARECHARGE_DEEP_LINKS = {

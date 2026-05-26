@@ -54,7 +54,7 @@ export function SyncStatusBar() {
     return (
       <div className="sc-sync-bar flex items-center justify-center gap-2 border-b border-amber-100 bg-amber-50/95 px-4 py-2 text-[11px] font-bold leading-5 text-amber-800">
         <Cloud size={12} />
-        מצב API — התחברו עם OTP (ודאו ש-/api/health מחזיר JSON)
+        מצב API — התחברו עם OTP (בדיקת שרver: /api/health ב-chrome incognito)
       </div>
     );
   }
