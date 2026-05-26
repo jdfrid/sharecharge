@@ -8,7 +8,7 @@ const router = Router();
 
 router.get('/state', authRequired, async (req, res) => {
   try {
-    const state = await loadFullState();
+    const state = await loadFullState(!!req.app.locals.dbReady);
     res.json(state);
   } catch (err) {
     console.error(err);

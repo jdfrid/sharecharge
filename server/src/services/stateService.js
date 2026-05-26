@@ -1,5 +1,10 @@
 import { query } from '../db/pool.js';
 import {
+  addEventMem,
+  getSettingsMem,
+  loadFullStateMem,
+} from '../devDataStore.js';
+import {
   rowToBooking,
   rowToDispute,
   rowToStation,
@@ -7,7 +12,11 @@ import {
   rowToUser,
 } from '../utils.js';
 
-export async function loadFullState() {
+export async function loadFullState(dbReady = true) {
+  if (!dbReady) {
+    return loadFullStateMem();
+  }
+
   const [settingsRes, usersRes, stationsRes, bookingsRes, txRes, disputesRes, eventsRes] = await Promise.all([
     query('SELECT * FROM settings WHERE id = 1'),
     query('SELECT * FROM users ORDER BY created_at DESC'),
@@ -39,7 +48,11 @@ export async function loadFullState() {
   };
 }
 
-export async function addEvent(text, type = 'activity') {
+export async function addEvent(text, type = 'activity', dbReady = true) {
+  if (!dbReady) {
+    addEventMem(text, type);
+    return;
+  }
   const id = `event-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   await query('INSERT INTO audit_events (id, text, type, time) VALUES ($1, $2, $3, $4)', [
     id,
@@ -49,7 +62,8 @@ export async function addEvent(text, type = 'activity') {
   ]);
 }
 
-export async function getSettings() {
+export async function getSettings(dbReady = true) {
+  if (!dbReady) return getSettingsMem();
   const { rows } = await query('SELECT * FROM settings WHERE id = 1');
   const s = rows[0];
   return {

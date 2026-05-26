@@ -11,6 +11,7 @@ import opsRoutes from './routes/ops.js';
 import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
 import { query } from './db/pool.js';
+import { initMemDataStore } from './devDataStore.js';
 
 dotenv.config();
 
@@ -64,6 +65,7 @@ app.get('/api/health', async (_req, res) => {
       db: false,
       dbError: 'DATABASE_URL missing — link sharecharge-db in Render Environment',
       otpFallback: process.env.ALLOW_DEV_OTP === 'true',
+      dataFallback: !app.locals.dbReady,
     });
   }
 
@@ -73,6 +75,7 @@ app.get('/api/health', async (_req, res) => {
       db: false,
       dbError: 'Database not initialized — check Render Logs for migrate/seed errors',
       otpFallback: process.env.ALLOW_DEV_OTP === 'true',
+      dataFallback: true,
     });
   }
 
@@ -153,6 +156,11 @@ async function boot() {
     }
   } else if (!process.env.DATABASE_URL) {
     /* already warned above */
+  }
+
+  if (!app.locals.dbReady) {
+    initMemDataStore();
+    console.warn('In-memory data store active (stations/bookings) until DATABASE_URL is linked.');
   }
 
   app.listen(PORT, '0.0.0.0', () => {

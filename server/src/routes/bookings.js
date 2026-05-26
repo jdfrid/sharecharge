@@ -1,13 +1,28 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
+import {
+  createBookingMem,
+  finishBookingMem,
+  getBookingRowMem,
+  listBookingsMem,
+  openDisputeMem,
+  updateBookingMem,
+} from '../devDataStore.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 import { addEvent, getSettings } from '../services/stateService.js';
 import { createId, createOtp, rowToBooking } from '../utils.js';
 
 const router = Router();
 
+function dbReady(req) {
+  return !!req.app.locals.dbReady;
+}
+
 router.get('/', authRequired, async (req, res) => {
   try {
+    if (!dbReady(req)) {
+      return res.json({ bookings: listBookingsMem(req.user) });
+    }
     let sql = 'SELECT * FROM bookings';
     const params = [];
     if (req.user.role === 'driver') {
@@ -29,12 +44,20 @@ router.get('/', authRequired, async (req, res) => {
 router.post('/', authRequired, requireRole('driver'), async (req, res) => {
   try {
     const { stationId, startTime, durationHours } = req.body || {};
+    if (!dbReady(req)) {
+      const booking = createBookingMem(req.user, { stationId, startTime, durationHours });
+      if (!booking) return res.status(404).json({ error: 'Station not available' });
+      return res.status(201).json({ booking });
+    }
+
     const { rows: stationRows } = await query('SELECT * FROM stations WHERE id = $1', [stationId]);
     const station = stationRows[0];
     if (!station || !station.available) return res.status(404).json({ error: 'Station not available' });
 
     const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.sub]);
     const driver = userRows[0];
+    if (!driver) return res.status(404).json({ error: 'Driver not found' });
+
     const id = createId('booking');
     const now = Date.now();
 
@@ -55,48 +78,93 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
       ],
     );
 
-    await addEvent(`הזמנה מ${driver.name} (${driver.email}) → ${station.name}`);
+    await addEvent(`הזמנה מ${driver.name} (${driver.email}) → ${station.name}`, 'activity', true);
     const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [id]);
     res.status(201).json({ booking: rowToBooking(rows[0]) });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create booking' });
+    console.error('[create booking]', err);
+    res.status(500).json({
+      error: 'Failed to create booking',
+      detail: process.env.ALLOW_DEV_OTP === 'true' ? err.message : undefined,
+    });
   }
 });
 
 router.post('/:id/approve', authRequired, requireRole('host'), async (req, res) => {
   return patchBooking(req, res, async (booking) => {
     if (booking.host_id !== req.user.sub) throw forbidden();
+    if (!dbReady(req)) {
+      updateBookingMem(booking.id, (row) => {
+        row.status = 'approved';
+        row.approved_at = Date.now();
+      });
+      addEvent('הספק אישר בקשת טעינה', 'activity', false);
+      return;
+    }
     await query(`UPDATE bookings SET status = 'approved', approved_at = $1 WHERE id = $2`, [Date.now(), booking.id]);
-    await addEvent('הספק אישר בקשת טעינה');
+    await addEvent('הספק אישר בקשת טעינה', 'activity', true);
   });
 });
 
 router.post('/:id/reject', authRequired, requireRole('host'), async (req, res) => {
   return patchBooking(req, res, async (booking) => {
     if (booking.host_id !== req.user.sub) throw forbidden();
+    if (!dbReady(req)) {
+      updateBookingMem(booking.id, (row) => {
+        row.status = 'rejected';
+        row.rejected_at = Date.now();
+      });
+      addEvent('הספק דחה בקשת טעינה', 'warning', false);
+      return;
+    }
     await query(`UPDATE bookings SET status = 'rejected', rejected_at = $1 WHERE id = $2`, [Date.now(), booking.id]);
-    await addEvent('הספק דחה בקשת טעינה', 'warning');
+    await addEvent('הספק דחה בקשת טעינה', 'warning', true);
   });
 });
 
 router.post('/:id/on-way', authRequired, requireRole('driver'), async (req, res) => {
   return patchBooking(req, res, async (booking) => {
     if (booking.driver_id !== req.user.sub) throw forbidden();
-    const settings = await getSettings();
+    const settings = await getSettings(dbReady(req));
     const otp = createOtp();
     const expires = Date.now() + settings.otpWindowMinutes * 60 * 1000;
+    if (!dbReady(req)) {
+      updateBookingMem(booking.id, (row) => {
+        row.status = 'on_way';
+        row.otp = otp;
+        row.otp_expires_at = expires;
+        row.on_way_at = Date.now();
+      });
+      addEvent(`הנהג בדרך. נוצר קוד OTP ${otp}`, 'activity', false);
+      return;
+    }
     await query(
       `UPDATE bookings SET status = 'on_way', otp = $1, otp_expires_at = $2, on_way_at = $3 WHERE id = $4`,
       [otp, expires, Date.now(), booking.id],
     );
-    await addEvent(`הנהג בדרך. נוצר קוד OTP ${otp}`);
+    await addEvent(`הנהג בדרך. נוצר קוד OTP ${otp}`, 'activity', true);
   });
 });
 
 router.post('/:id/verify-otp', authRequired, requireRole('host'), async (req, res) => {
   try {
     const { otp } = req.body || {};
+    if (!dbReady(req)) {
+      const booking = getBookingRowMem(req.params.id);
+      if (!booking) return res.status(404).json({ error: 'Not found' });
+      if (booking.host_id !== req.user.sub) return res.status(403).json({ error: 'Forbidden' });
+      if (booking.otp !== String(otp).trim() || Date.now() > Number(booking.otp_expires_at)) {
+        return res.status(400).json({ error: 'Invalid OTP' });
+      }
+      const updated = updateBookingMem(booking.id, (row) => {
+        row.status = 'otp_verified';
+        row.host_confirmed_connection = true;
+        row.otp_verified_at = Date.now();
+      });
+      addEvent('הספק אימת OTP וחיבור העמדה מוכן', 'activity', false);
+      return res.json({ booking: updated, ok: true });
+    }
+
     const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
     const booking = rows[0];
     if (!booking) return res.status(404).json({ error: 'Not found' });
@@ -108,7 +176,7 @@ router.post('/:id/verify-otp', authRequired, requireRole('host'), async (req, re
       `UPDATE bookings SET status = 'otp_verified', host_confirmed_connection = true, otp_verified_at = $1 WHERE id = $2`,
       [Date.now(), booking.id],
     );
-    await addEvent('הספק אימת OTP וחיבור העמדה מוכן');
+    await addEvent('הספק אימת OTP וחיבור העמדה מוכן', 'activity', true);
     const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
     res.json({ booking: rowToBooking(updated), ok: true });
   } catch (err) {
@@ -121,17 +189,32 @@ router.post('/:id/start-charge', authRequired, requireRole('driver'), async (req
   return patchBooking(req, res, async (booking) => {
     if (booking.driver_id !== req.user.sub) throw forbidden();
     if (booking.status !== 'otp_verified') throw badRequest('Invalid status');
+    if (!dbReady(req)) {
+      updateBookingMem(booking.id, (row) => {
+        row.status = 'charging';
+        row.driver_confirmed_start = true;
+        row.started_at = Date.now();
+      });
+      addEvent('הנהג אישר התחלת טעינה', 'activity', false);
+      return;
+    }
     await query(
       `UPDATE bookings SET status = 'charging', driver_confirmed_start = true, started_at = $1 WHERE id = $2`,
       [Date.now(), booking.id],
     );
-    await addEvent('הנהג אישר התחלת טעינה');
+    await addEvent('הנהג אישר התחלת טעינה', 'activity', true);
   });
 });
 
 router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) => {
   try {
     const { kwh } = req.body || {};
+    if (!dbReady(req)) {
+      const booking = finishBookingMem(req.params.id, req.user.sub, kwh);
+      if (!booking) return res.status(400).json({ error: 'Finish failed' });
+      return res.json({ booking });
+    }
+
     const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
     const booking = rows[0];
     if (!booking) return res.status(404).json({ error: 'Not found' });
@@ -140,7 +223,7 @@ router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) =
 
     const { rows: stRows } = await query('SELECT * FROM stations WHERE id = $1', [booking.station_id]);
     const station = stRows[0];
-    const settings = await getSettings();
+    const settings = await getSettings(true);
     const amount = Number((Number(kwh) * Number(station.price_per_kwh)).toFixed(2));
     const platformFee = Number((amount * settings.commission / 100).toFixed(2));
     const hostShare = Number((amount - platformFee).toFixed(2));
@@ -158,7 +241,7 @@ router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) =
       [txId, booking.id, station.id, booking.driver_id, booking.host_id, amount, hostShare, platformFee, kwh, now],
     );
 
-    await addEvent(`טעינה הסתיימה · חויב סך ₪${amount}`);
+    await addEvent(`טעינה הסתיימה · חויב סך ₪${amount}`, 'activity', true);
     const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
     res.json({ booking: rowToBooking(updated) });
   } catch (err) {
@@ -170,6 +253,13 @@ router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) =
 router.post('/:id/dispute', authRequired, async (req, res) => {
   try {
     const { reason } = req.body || {};
+    if (!dbReady(req)) {
+      const result = openDisputeMem(req.params.id, reason);
+      if (result.error === 'not_found') return res.status(404).json({ error: 'Not found' });
+      if (result.error === 'already_open') return res.status(409).json({ error: 'Dispute already open' });
+      return res.status(201).json({ ok: true, id: result.id });
+    }
+
     const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
     const booking = rows[0];
     if (!booking) return res.status(404).json({ error: 'Not found' });
@@ -185,7 +275,7 @@ router.post('/:id/dispute', authRequired, async (req, res) => {
       `INSERT INTO disputes (id, booking_id, reason, status, created_at) VALUES ($1,$2,$3,'open',$4)`,
       [id, booking.id, reason || 'Dispute', Date.now()],
     );
-    await addEvent('נפתחה מחלוקת לטיפול מנהל', 'warning');
+    await addEvent('נפתחה מחלוקת לטיפול מנהל', 'warning', true);
     res.status(201).json({ ok: true, id });
   } catch (err) {
     console.error(err);
@@ -195,12 +285,16 @@ router.post('/:id/dispute', authRequired, async (req, res) => {
 
 async function patchBooking(req, res, fn) {
   try {
-    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
-    const booking = rows[0];
+    const ready = dbReady(req);
+    const booking = ready
+      ? (await query('SELECT * FROM bookings WHERE id = $1', [req.params.id])).rows[0]
+      : getBookingRowMem(req.params.id);
     if (!booking) return res.status(404).json({ error: 'Not found' });
     await fn(booking);
-    const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
-    res.json({ booking: rowToBooking(updated) });
+    const updated = ready
+      ? rowToBooking((await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0])
+      : rowToBooking(getBookingRowMem(booking.id));
+    res.json({ booking: updated });
   } catch (err) {
     if (err.code === 'FORBIDDEN') return res.status(403).json({ error: 'Forbidden' });
     if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message });

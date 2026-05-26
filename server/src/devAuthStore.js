@@ -26,6 +26,17 @@ export function loadMemUserByEmail(email) {
   return users.get(email.toLowerCase());
 }
 
+export function loadMemUserById(id) {
+  for (const user of users.values()) {
+    if (user.id === id) return user;
+  }
+  return null;
+}
+
+export function listMemUsers() {
+  return [...users.values()];
+}
+
 export function seedMemUsers(seedUsers) {
   for (const user of seedUsers) {
     saveMemUser(user);
