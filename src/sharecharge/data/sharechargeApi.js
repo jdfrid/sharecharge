@@ -45,7 +45,7 @@ function blockedResponseMessage(text = '') {
     trimmed.includes('<div id="root"') ||
     trimmed.includes('/assets/index-')
   ) {
-    return 'כתובת /api/health מחזירה את האתר (HTML) במקום JSON — ה-API לא deployed. ב-Render: Manual Deploy עם Dockerfile החדש.';
+    return 'כתובת /api/health מחזירה את האתר (HTML) במקום JSON — ה-API לא deployed. ב-Render: Manual Deploy עם Dockerfile.';
   }
   return null;
 }
@@ -82,7 +82,7 @@ export function formatShareChargeApiError(err, action = 'request') {
     }
     return `לא ניתן להגיע לשרver (${target}). ודאו: 1) הטלפון והמחשב על אותו Wi‑Fi 2) npm run start:api פועל 3) חומת אש מאפשרת פורט 3001.`;
   }
-  return err?.message || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : 'הבקשה נכשלה');
+  return err?.message || err?.data?.detail || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : 'הבקשה נכשלה');
 }
 
 /** Wake Render / verify connectivity before OTP. */
@@ -102,8 +102,22 @@ export async function checkApiHealth({ retries = 3, delayMs = 12000 } = {}) {
       if (blocked) {
         return { ok: false, reason: 'html-not-api', message: blocked, attempt };
       }
-      if (parseHealthPayload(text)) {
-        return { ok: true, attempt };
+      const health = parseHealthPayload(text);
+      if (health) {
+        if (health.db === false && !health.otpFallback) {
+          return {
+            ok: false,
+            reason: 'db',
+            message: health.dbError || 'מסד הנתונים לא מחובר ב-Render — קשרו sharecharge-db',
+            attempt,
+          };
+        }
+        return {
+          ok: true,
+          attempt,
+          db: health.db === true,
+          dbWarning: health.db === false ? health.dbError : undefined,
+        };
       }
       lastMessage = res.status === 404
         ? `404 ב-${url} — אין API. Render Dashboard → sharecharge → Manual Deploy (Dockerfile).`

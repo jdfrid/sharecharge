@@ -10,6 +10,7 @@ import bookingRoutes from './routes/bookings.js';
 import opsRoutes from './routes/ops.js';
 import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
+import { query } from './db/pool.js';
 
 dotenv.config();
 
@@ -19,6 +20,8 @@ const hasPublic = fs.existsSync(path.join(publicDir, 'index.html'));
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
+
+app.locals.dbReady = false;
 
 const origins = (process.env.CORS_ORIGINS || 'http://localhost:5173,capacitor://localhost')
   .split(',')
@@ -47,24 +50,66 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'sharecharge-api', port: PORT });
-});
+app.get('/api/health', async (_req, res) => {
+  const payload = {
+    ok: true,
+    service: 'sharecharge-api',
+    port: PORT,
+    db: app.locals.dbReady,
+  };
 
-app.get('/api/health/db', async (_req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.json({
+      ...payload,
+      db: false,
+      dbError: 'DATABASE_URL missing — link sharecharge-db in Render Environment',
+      otpFallback: process.env.ALLOW_DEV_OTP === 'true',
+    });
+  }
+
+  if (!app.locals.dbReady) {
+    return res.json({
+      ...payload,
+      db: false,
+      dbError: 'Database not initialized — check Render Logs for migrate/seed errors',
+      otpFallback: process.env.ALLOW_DEV_OTP === 'true',
+    });
+  }
+
   try {
-    if (!process.env.DATABASE_URL) {
-      return res.status(503).json({ ok: false, error: 'DATABASE_URL is not set' });
-    }
     await query('SELECT 1 AS ok');
     const { rows } = await query(
       "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'auth_otps') AS ready",
     );
-    return res.json({ ok: true, db: true, authOtpsTable: rows[0]?.ready === true });
+    return res.json({ ...payload, db: true, authOtpsTable: rows[0]?.ready === true });
   } catch (err) {
-    return res.status(503).json({ ok: false, error: err.message || 'Database unavailable' });
+    return res.json({ ...payload, db: false, dbError: err.message || 'Database unavailable' });
   }
 });
+
+app.get('/api/health/db', async (_req, res) => {
+  const health = await fetchHealthPayload();
+  if (!health.db) return res.status(503).json({ ok: false, error: health.dbError || 'Database unavailable' });
+  return res.json({ ok: true, db: true, authOtpsTable: health.authOtpsTable === true });
+});
+
+async function fetchHealthPayload() {
+  if (!process.env.DATABASE_URL) {
+    return { db: false, dbError: 'DATABASE_URL is not set' };
+  }
+  if (!app.locals.dbReady) {
+    return { db: false, dbError: 'Database not initialized' };
+  }
+  try {
+    await query('SELECT 1 AS ok');
+    const { rows } = await query(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'auth_otps') AS ready",
+    );
+    return { db: true, authOtpsTable: rows[0]?.ready === true };
+  } catch (err) {
+    return { db: false, dbError: err.message || 'Database unavailable' };
+  }
+}
 
 app.use('/api/sharecharge/auth', authRoutes);
 app.use('/api/sharecharge/stations', stationRoutes);
@@ -79,19 +124,25 @@ if (hasPublic) {
 }
 
 async function boot() {
-  if (!process.env.DATABASE_URL && process.env.USE_PG_MEM !== 'true') {
-    throw new Error('DATABASE_URL is required in production');
-  }
-
-  if (process.env.AUTO_MIGRATE !== 'false') {
-    await migrate();
-    if (process.env.AUTO_SEED !== 'false') {
-      await seed();
+  if (process.env.DATABASE_URL && process.env.AUTO_MIGRATE !== 'false') {
+    try {
+      await migrate();
+      if (process.env.AUTO_SEED !== 'false') {
+        await seed();
+      }
+      app.locals.dbReady = true;
+      console.log('Database ready.');
+    } catch (err) {
+      console.error('DB migrate/seed failed:', err.message);
+      if (process.env.ALLOW_DEV_OTP !== 'true') throw err;
+      console.warn('Continuing with in-memory OTP fallback (ALLOW_DEV_OTP=true).');
     }
+  } else if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL not set — link sharecharge-db in Render.');
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ShareCharge API listening on http://0.0.0.0:${PORT}`);
+    console.log(`ShareCharge API listening on http://0.0.0.0:${PORT} (dbReady=${app.locals.dbReady})`);
   });
 }
 

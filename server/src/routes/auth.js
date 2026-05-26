@@ -1,40 +1,144 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { query } from '../db/pool.js';
+import {
+  clearMemOtp,
+  loadMemOtp,
+  loadMemUserByEmail,
+  saveMemOtp,
+  saveMemUser,
+} from '../devAuthStore.js';
 import { createId, createOtp, PORTAL_TO_ROLE, rowToUser } from '../utils.js';
 
 const router = Router();
 
+function devOtpEnabled() {
+  return process.env.ALLOW_DEV_OTP === 'true' || process.env.NODE_ENV !== 'production';
+}
+
+function respondOtp(res, { email, portal, code }) {
+  console.log(`[OTP] ${portal} ${email} → ${code}`);
+  res.json({
+    ok: true,
+    sentAt: Date.now(),
+    devCode: devOtpEnabled() ? code : undefined,
+  });
+}
+
+async function persistOtp(email, portal, code, expiresAt, dbReady) {
+  if (dbReady) {
+    await query(
+      `INSERT INTO auth_otps (email, portal, code, expires_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email, portal) DO UPDATE SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at`,
+      [email, portal, code, expiresAt],
+    );
+    return;
+  }
+  if (!devOtpEnabled()) {
+    throw new Error('Database unavailable');
+  }
+  saveMemOtp(email, portal, code, expiresAt);
+  console.warn('[OTP] saved in memory (DB unavailable)');
+}
+
+async function loadOtp(email, portal, dbReady) {
+  if (dbReady) {
+    const { rows } = await query('SELECT * FROM auth_otps WHERE email = $1 AND portal = $2', [email, portal]);
+    return rows[0];
+  }
+  return loadMemOtp(email, portal);
+}
+
+async function resolveUser(normalizedEmail, expectedRole, dbReady) {
+  if (dbReady) {
+    let { rows: userRows } = await query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
+    let user = userRows[0];
+
+    if (!user) {
+      if (expectedRole === 'admin') {
+        throw Object.assign(new Error('Admin account not provisioned'), { status: 403 });
+      }
+      const id = createId(expectedRole === 'host' ? 'host' : 'driver');
+      const name = normalizedEmail.split('@')[0];
+      await query(
+        `INSERT INTO users (id, name, email, role, verified, blocked, revenue, spend, created_at)
+         VALUES ($1, $2, $3, $4, true, false, 0, 0, $5)`,
+        [id, name, normalizedEmail, expectedRole, Date.now()],
+      );
+      user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0];
+    } else if (user.role !== expectedRole && expectedRole !== 'admin') {
+      throw Object.assign(new Error(`Account is registered as ${user.role}, not ${expectedRole}`), { status: 403 });
+    } else if (expectedRole === 'admin' && user.role !== 'admin') {
+      throw Object.assign(new Error('Not an admin account'), { status: 403 });
+    }
+
+    if (user.blocked) {
+      throw Object.assign(new Error('Account blocked'), { status: 403 });
+    }
+
+    return rowToUser(user);
+  }
+
+  if (!devOtpEnabled()) {
+    throw new Error('Database unavailable');
+  }
+
+  let user = loadMemUserByEmail(normalizedEmail);
+  if (!user) {
+    if (expectedRole === 'admin') {
+      throw Object.assign(new Error('Admin account not provisioned'), { status: 403 });
+    }
+    user = {
+      id: createId(expectedRole === 'host' ? 'host' : 'driver'),
+      name: normalizedEmail.split('@')[0],
+      email: normalizedEmail,
+      role: expectedRole,
+      verified: true,
+      blocked: false,
+      revenue: 0,
+      spend: 0,
+      createdAt: Date.now(),
+    };
+    saveMemUser(user);
+  }
+  return user;
+}
+
+async function clearOtp(email, portal, dbReady) {
+  if (dbReady) {
+    await query('DELETE FROM auth_otps WHERE email = $1 AND portal = $2', [email, portal]);
+    return;
+  }
+  clearMemOtp(email, portal);
+}
+
 router.post('/otp/send', async (req, res) => {
   try {
     const { email, portal } = req.body || {};
-    if (!email?.includes('@') || !PORTAL_TO_ROLE[portal]) {
+    const normalizedEmail = email?.toLowerCase()?.trim();
+    if (!normalizedEmail?.includes('@') || !PORTAL_TO_ROLE[portal]) {
       return res.status(400).json({ error: 'Invalid email or portal' });
     }
 
     const code = createOtp();
     const expiresAt = Date.now() + 10 * 60 * 1000;
+    const dbReady = !!req.app.locals.dbReady;
 
-    await query(
-      `INSERT INTO auth_otps (email, portal, code, expires_at)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (email, portal) DO UPDATE SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at`,
-      [email.toLowerCase().trim(), portal, code, expiresAt],
-    );
+    try {
+      await persistOtp(normalizedEmail, portal, code, expiresAt, dbReady);
+    } catch (err) {
+      if (!devOtpEnabled()) throw err;
+      saveMemOtp(normalizedEmail, portal, code, expiresAt);
+      console.warn('[OTP send] DB failed, using memory:', err.message);
+    }
 
-    console.log(`[OTP] ${portal} ${email} → ${code}`);
-
-    res.json({
-      ok: true,
-      sentAt: Date.now(),
-      devCode: process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP === 'true' ? code : undefined,
-    });
+    respondOtp(res, { email: normalizedEmail, portal, code });
   } catch (err) {
     console.error('[OTP send]', err);
-    const expose = process.env.ALLOW_DEV_OTP === 'true' || process.env.NODE_ENV !== 'production';
     res.status(500).json({
       error: 'Failed to send OTP',
-      detail: expose ? err.message : undefined,
+      detail: devOtpEnabled() ? err.message : undefined,
     });
   }
 });
@@ -47,42 +151,14 @@ router.post('/otp/verify', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload' });
     }
 
-    const expectedRole = PORTAL_TO_ROLE[portal];
-    const { rows: otpRows } = await query(
-      'SELECT * FROM auth_otps WHERE email = $1 AND portal = $2',
-      [normalizedEmail, portal],
-    );
-    const otpRow = otpRows[0];
+    const dbReady = !!req.app.locals.dbReady;
+    const otpRow = await loadOtp(normalizedEmail, portal, dbReady);
     if (!otpRow || otpRow.code !== String(code).trim() || Date.now() > Number(otpRow.expires_at)) {
       return res.status(401).json({ error: 'Invalid or expired code' });
     }
 
-    let { rows: userRows } = await query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
-    let user = userRows[0];
-
-    if (!user) {
-      if (expectedRole === 'admin') {
-        return res.status(403).json({ error: 'Admin account not provisioned' });
-      }
-      const id = createId(expectedRole === 'host' ? 'host' : 'driver');
-      const name = normalizedEmail.split('@')[0];
-      await query(
-        `INSERT INTO users (id, name, email, role, verified, blocked, revenue, spend, created_at)
-         VALUES ($1, $2, $3, $4, true, false, 0, 0, $5)`,
-        [id, name, normalizedEmail, expectedRole, Date.now()],
-      );
-      user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0];
-    } else if (user.role !== expectedRole && expectedRole !== 'admin') {
-      return res.status(403).json({ error: `Account is registered as ${user.role}, not ${expectedRole}` });
-    } else if (expectedRole === 'admin' && user.role !== 'admin') {
-      return res.status(403).json({ error: 'Not an admin account' });
-    }
-
-    if (user.blocked) {
-      return res.status(403).json({ error: 'Account blocked' });
-    }
-
-    await query('DELETE FROM auth_otps WHERE email = $1 AND portal = $2', [normalizedEmail, portal]);
+    const user = await resolveUser(normalizedEmail, PORTAL_TO_ROLE[portal], dbReady);
+    await clearOtp(normalizedEmail, portal, dbReady);
 
     const token = jwt.sign(
       { sub: user.id, email: user.email, role: user.role, portal },
@@ -92,13 +168,17 @@ router.post('/otp/verify', async (req, res) => {
 
     res.json({
       token,
-      user: rowToUser(user),
+      user,
       portal,
       verifiedAt: Date.now(),
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Verification failed' });
+    console.error('[OTP verify]', err);
+    const status = err.status || 500;
+    res.status(status).json({
+      error: err.message || 'Verification failed',
+      detail: devOtpEnabled() ? err.message : undefined,
+    });
   }
 });
 
@@ -108,9 +188,14 @@ router.get('/me', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-    const { rows } = await query('SELECT * FROM users WHERE id = $1', [payload.sub]);
-    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: rowToUser(rows[0]), portal: payload.portal });
+    if (req.app.locals.dbReady) {
+      const { rows } = await query('SELECT * FROM users WHERE id = $1', [payload.sub]);
+      if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+      return res.json({ user: rowToUser(rows[0]), portal: payload.portal });
+    }
+    const user = loadMemUserByEmail(payload.email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    return res.json({ user, portal: payload.portal });
   } catch {
     res.status(401).json({ error: 'Invalid token' });
   }

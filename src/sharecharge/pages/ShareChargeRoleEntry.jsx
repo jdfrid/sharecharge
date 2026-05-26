@@ -52,7 +52,13 @@ export function ShareChargeRoleEntry({ portal }) {
     setServerMessage('מתעורר/בודק חיבור לשרver… (עד ~45 שניות ב-Free tier)');
     const health = await checkApiHealth();
     setServerOk(health.ok);
-    setServerMessage(health.ok ? 'מחובר לשרver Render' : health.message);
+    setServerMessage(
+      health.ok
+        ? health.dbWarning
+          ? `מחובר — OTP זמני (מסד נתונים: ${health.dbWarning})`
+          : 'מחובר לשרver Render'
+        : health.message,
+    );
     return health.ok;
   }, [apiMode]);
 
