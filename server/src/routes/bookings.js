@@ -45,9 +45,22 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
   try {
     const { stationId, startTime, durationHours } = req.body || {};
     if (!dbReady(req)) {
-      const booking = createBookingMem(req.user, { stationId, startTime, durationHours });
-      if (!booking) return res.status(404).json({ error: 'Station not available' });
-      return res.status(201).json({ booking });
+      const result = createBookingMem(req.user, { stationId, startTime, durationHours });
+      if (result.error === 'driver_not_found') {
+        return res.status(401).json({
+          error: 'Session expired',
+          detail: 'הסשן פג — צאו והתחברו שוב עם OTP',
+        });
+      }
+      if (result.error === 'station_not_found' || result.error === 'station_unavailable') {
+        return res.status(404).json({
+          error: 'Station not available',
+          detail: result.error === 'station_unavailable'
+            ? 'העמדה לא זמינה כרגע'
+            : `עמדה לא נמצאה (${stationId || 'חסר מזהה'}) — רעננו את הרשימה`,
+        });
+      }
+      return res.status(201).json({ booking: result.booking });
     }
 
     const { rows: stationRows } = await query('SELECT * FROM stations WHERE id = $1', [stationId]);
@@ -55,8 +68,25 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
     if (!station || !station.available) return res.status(404).json({ error: 'Station not available' });
 
     const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.sub]);
-    const driver = userRows[0];
-    if (!driver) return res.status(404).json({ error: 'Driver not found' });
+    let driver = userRows[0];
+    if (!driver && req.user.email) {
+      const email = req.user.email.toLowerCase().trim();
+      const name = email.split('@')[0] || 'לקוח';
+      const inserted = await query(
+        `INSERT INTO users (id, name, email, role, verified, blocked, revenue, spend, created_at)
+         VALUES ($1, $2, $3, 'driver', true, false, 0, 0, $4)
+         ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+         RETURNING *`,
+        [req.user.sub, name, email, Date.now()],
+      );
+      driver = inserted.rows[0];
+    }
+    if (!driver) {
+      return res.status(401).json({
+        error: 'Session expired',
+        detail: 'הסשן פג — צאו והתחברו שוב עם OTP',
+      });
+    }
 
     const id = createId('booking');
     const now = Date.now();

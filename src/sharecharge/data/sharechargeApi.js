@@ -75,6 +75,15 @@ export function isNetworkFetchError(err) {
 
 export function formatShareChargeApiError(err, action = 'request') {
   if (err?.blocked) return err.message;
+  const detail = err?.data?.detail;
+  const apiError = err?.data?.error || err?.message;
+  if (apiError === 'Station not available') {
+    return detail || 'העמדה לא זמינה — חזרו לרשימה, רעננו, ונסו שוב';
+  }
+  if (apiError === 'Session expired') {
+    return detail || 'הסשן פג — צאו והתחברו שוב עם OTP';
+  }
+  if (detail) return detail;
   if (isNetworkFetchError(err)) {
     const target = API_ORIGIN || 'השרת';
     if (API_ORIGIN.includes('onrender.com')) {

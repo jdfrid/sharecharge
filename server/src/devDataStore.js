@@ -1,4 +1,4 @@
-import { listMemUsers, loadMemUserByEmail } from './devAuthStore.js';
+import { listMemUsers, loadMemUserByEmail, saveMemUser } from './devAuthStore.js';
 import { createId, createOtp, rowToBooking, rowToDispute, rowToStation, rowToTransaction, rowToUser } from './utils.js';
 
 const settings = {
@@ -103,6 +103,34 @@ function findUserById(id) {
   return allUsers().find((row) => row.id === id) || null;
 }
 
+function ensureDriverFromJwt(jwtUser) {
+  if (!jwtUser?.sub || jwtUser.role !== 'driver') return null;
+  let driver = findUserById(jwtUser.sub);
+  if (driver) return driver;
+
+  const email = jwtUser.email?.toLowerCase()?.trim();
+  if (email) {
+    const memUser = loadMemUserByEmail(email);
+    if (memUser) return memUserToRow(memUser);
+  }
+
+  if (!email) return null;
+
+  const user = {
+    id: jwtUser.sub,
+    name: email.split('@')[0] || 'לקוח',
+    email,
+    role: 'driver',
+    verified: true,
+    blocked: false,
+    revenue: 0,
+    spend: 0,
+    createdAt: Date.now(),
+  };
+  saveMemUser(user);
+  return memUserToRow(user);
+}
+
 export function initMemDataStore() {
   if (initialized) return;
   users = seedUsers.map((row) => ({ ...row }));
@@ -161,19 +189,23 @@ export function addEventMem(text, type = 'activity') {
 
 export function createBookingMem(jwtUser, { stationId, startTime, durationHours }) {
   if (!initialized) initMemDataStore();
-  const station = stations.find((row) => row.id === stationId);
-  if (!station || !station.available) return null;
-
-  let driver = findUserById(jwtUser.sub);
-  if (!driver && jwtUser.email) {
-    driver = loadMemUserByEmail(jwtUser.email);
-    if (driver) driver = memUserToRow(driver);
+  const normalizedStationId = String(stationId || '').trim();
+  const station = stations.find((row) => row.id === normalizedStationId);
+  if (!normalizedStationId || !station) {
+    return { error: 'station_not_found' };
   }
-  if (!driver) return null;
+  if (!station.available) {
+    return { error: 'station_unavailable' };
+  }
+
+  const driver = ensureDriverFromJwt(jwtUser);
+  if (!driver) {
+    return { error: 'driver_not_found' };
+  }
 
   const row = {
     id: createId('booking'),
-    station_id: stationId,
+    station_id: normalizedStationId,
     driver_id: driver.id,
     driver_email_snapshot: driver.email,
     host_id: station.host_id,
@@ -193,7 +225,7 @@ export function createBookingMem(jwtUser, { stationId, startTime, durationHours 
   };
   bookings.unshift(row);
   addEventMem(`הזמנה מ${driver.name} (${driver.email}) → ${station.name}`);
-  return rowToBooking(row);
+  return { booking: rowToBooking(row) };
 }
 
 export function getBookingMem(id) {
