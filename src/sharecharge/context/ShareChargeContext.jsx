@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { localStorageRepository } from '../data/localStorageRepository';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 import { isApiMode, loadStateFromApi } from '../data/apiRepository';
-import { formatShareChargeApiError, getStoredToken, sharechargeApi } from '../data/sharechargeApi';
+import { formatShareChargeApiError, getAuthToken, getStoredToken, sharechargeApi } from '../data/sharechargeApi';
 import { getInitialAppState } from '../state/initialState';
 import { STORAGE_KEY, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { createId, createOtp, currency } from '../utils';
@@ -79,7 +79,7 @@ export function ShareChargeProvider({ children }) {
 
   useEffect(() => {
     if (!useApi) return undefined;
-    if (!getStoredToken(apiPortal)) {
+    if (!getAuthToken(apiPortal)) {
       setLoading(false);
       setSyncError(null);
       return undefined;
@@ -152,13 +152,20 @@ export function ShareChargeProvider({ children }) {
       },
       createBooking: async ({ stationId, startTime, durationHours }) => {
         if (useApi) {
-          const { booking } = await sharechargeApi.createBooking(SHARECHARGE_ROLE_KEYS.client, {
-            stationId,
-            startTime,
-            durationHours,
-          });
-          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
-          return booking?.id || '';
+          try {
+            const { booking } = await sharechargeApi.createBooking(SHARECHARGE_ROLE_KEYS.client, {
+              stationId,
+              startTime,
+              durationHours,
+            });
+            await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+            return booking?.id || '';
+          } catch (err) {
+            if (err.status === 401) {
+              clearAuthSession(SHARECHARGE_ROLE_KEYS.client);
+            }
+            throw new Error(formatShareChargeApiError(err, 'booking'));
+          }
         }
         let bookingId = '';
         update((draft) => {

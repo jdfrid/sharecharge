@@ -2,6 +2,30 @@ const API_ORIGIN = (import.meta.env.VITE_SHARECHARGE_API_URL || '').replace(/\/$
 const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api/sharecharge` : '/api/sharecharge';
 
 const TOKEN_KEY = 'sharecharge-jwt';
+const AUTH_SESSION_KEY = 'sharecharge-auth-sessions-v2';
+
+function tokenFromAuthSession(portal) {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return null;
+    const sessions = JSON.parse(raw);
+    return sessions[portal]?.token || null;
+  } catch {
+    return null;
+  }
+}
+
+/** JWT for API — prefers sharecharge-jwt, falls back to auth session (APK/Web sync). */
+export function getAuthToken(portal) {
+  const stored = getStoredToken(portal);
+  if (stored) return stored;
+  const sessionToken = tokenFromAuthSession(portal);
+  if (sessionToken) {
+    setStoredToken(portal, sessionToken);
+    return sessionToken;
+  }
+  return null;
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,7 +115,7 @@ export function formatShareChargeApiError(err, action = 'request') {
     }
     return `לא ניתן להגיע לשרver (${target}). ודאו: 1) הטלפון והמחשב על אותו Wi‑Fi 2) npm run start:api פועל 3) חומת אש מאפשרת פורט 3001.`;
   }
-  return err?.message || err?.data?.detail || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : 'הבקשה נכשלה');
+  return err?.message || err?.data?.detail || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : action === 'booking' ? 'שליחת ההזמנה נכשלה' : 'הבקשה נכשלה');
 }
 
 /** Wake Render / verify connectivity before OTP. */
@@ -167,7 +191,7 @@ export function clearStoredToken(portal) {
 }
 
 export async function apiRequest(path, { method = 'GET', body, portal, token } = {}) {
-  const authToken = token || (portal ? getStoredToken(portal) : null);
+  const authToken = token || (portal ? getAuthToken(portal) : null);
   const headers = { 'Content-Type': 'application/json' };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
 

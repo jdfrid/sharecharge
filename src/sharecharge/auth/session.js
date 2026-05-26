@@ -1,5 +1,5 @@
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
-import { clearStoredToken, getStoredToken } from '../data/sharechargeApi';
+import { clearStoredToken, getAuthToken, getStoredToken } from '../data/sharechargeApi';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 
 const AUTH_KEY = 'sharecharge-auth-sessions-v2';
@@ -74,7 +74,7 @@ export function isPortalSessionReady(portal) {
   if (!s[portal]?.verified) return false;
   if (s[portal]?.offlineDemo) return true;
   if (getPreferredRepositoryMode() === 'api') {
-    return !!(s[portal]?.token || getStoredToken(portal));
+    return !!(s[portal]?.token || getAuthToken(portal));
   }
   return true;
 }
@@ -83,7 +83,7 @@ export function isPortalSessionReady(portal) {
 export function sanitizePortalSession(portal) {
   const s = loadAuthSessions();
   if (!s[portal]?.verified) return false;
-  if (getPreferredRepositoryMode() === 'api' && !s[portal]?.token && !getStoredToken(portal)) {
+  if (getPreferredRepositoryMode() === 'api' && !s[portal]?.token && !getAuthToken(portal)) {
     clearAuthSession(portal);
     return true;
   }

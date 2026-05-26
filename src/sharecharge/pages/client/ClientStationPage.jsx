@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, MapPin, Zap } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
+import { formatShareChargeApiError } from '../../data/sharechargeApi';
 import { Card } from '../../components/ui/Card';
 import { getSessionClientEmail } from '../../auth/identity';
 
@@ -28,7 +29,11 @@ export function ClientStationPage() {
       await createBooking({ stationId: station.id, startTime: selectedTime, durationHours });
       navigate('/client/activity', { replace: true });
     } catch (err) {
-      setSubmitError(err?.message || 'שליחת ההזמנה נכשלה — בדקו חיבור לשרver');
+      const message = formatShareChargeApiError(err, 'booking');
+      setSubmitError(message);
+      if (err.status === 401) {
+        setTimeout(() => navigate('/client/entry', { replace: true }), 2000);
+      }
     } finally {
       setBusy(false);
     }

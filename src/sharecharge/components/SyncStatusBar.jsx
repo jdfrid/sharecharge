@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useShareCharge } from '../context/ShareChargeContext';
 import { resolveApiPortal } from '../auth/portal';
 import { loadAuthSessions } from '../auth/session';
-import { getStoredToken } from '../data/sharechargeApi';
+import { getAuthToken } from '../data/sharechargeApi';
 
 export function SyncStatusBar() {
   const location = useLocation();
@@ -11,7 +11,7 @@ export function SyncStatusBar() {
   const portal = resolveApiPortal(location);
   const session = loadAuthSessions()[portal];
   const offlineDemo = !!session?.offlineDemo;
-  const hasApiSession = !!(session?.token || getStoredToken(portal));
+  const hasApiSession = !!(session?.token || getAuthToken(portal));
 
   if (repositoryMode !== 'api' || offlineDemo) {
     return (
