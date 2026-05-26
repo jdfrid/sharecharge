@@ -80,7 +80,7 @@ export function formatShareChargeApiError(err, action = 'request') {
   if (apiError === 'Station not available') {
     return detail || 'העמדה לא זמינה — חזרו לרשימה, רעננו, ונסו שוב';
   }
-  if (apiError === 'Session expired') {
+  if (apiError === 'Session expired' || apiError === 'Invalid token' || apiError === 'Unauthorized') {
     return detail || 'הסשן פג — צאו והתחברו שוב עם OTP';
   }
   if (detail) return detail;

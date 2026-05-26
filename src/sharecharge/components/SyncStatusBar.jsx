@@ -1,24 +1,14 @@
 import { Cloud, CloudOff, Loader2, Unplug } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useShareCharge } from '../context/ShareChargeContext';
+import { resolveApiPortal } from '../auth/portal';
 import { loadAuthSessions } from '../auth/session';
 import { getStoredToken } from '../data/sharechargeApi';
-import { SHARECHARGE_ROLE_KEYS } from '../constants';
-import { getShareChargeApp, isSingleAppBuild } from '../config/appConfig';
-
-const portalForApp = {
-  client: SHARECHARGE_ROLE_KEYS.client,
-  provider: SHARECHARGE_ROLE_KEYS.provider,
-  ops: SHARECHARGE_ROLE_KEYS.system,
-};
-
-function activePortal() {
-  if (isSingleAppBuild() && portalForApp[getShareChargeApp()]) return portalForApp[getShareChargeApp()];
-  return SHARECHARGE_ROLE_KEYS.client;
-}
 
 export function SyncStatusBar() {
+  const location = useLocation();
   const { repositoryMode, loading, syncError } = useShareCharge();
-  const portal = activePortal();
+  const portal = resolveApiPortal(location);
   const session = loadAuthSessions()[portal];
   const offlineDemo = !!session?.offlineDemo;
   const hasApiSession = !!(session?.token || getStoredToken(portal));

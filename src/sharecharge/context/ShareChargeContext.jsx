@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { localStorageRepository } from '../data/localStorageRepository';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 import { isApiMode, loadStateFromApi } from '../data/apiRepository';
-import { sharechargeApi, getStoredToken } from '../data/sharechargeApi';
+import { formatShareChargeApiError, getStoredToken, sharechargeApi } from '../data/sharechargeApi';
 import { getInitialAppState } from '../state/initialState';
 import { STORAGE_KEY, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { createId, createOtp, currency } from '../utils';
-import { loadAuthSessions } from '../auth/session';
+import { clearAuthSession, loadAuthSessions } from '../auth/session';
+import { resolveApiPortal } from '../auth/portal';
 import { ensureDriverUserForEmail } from '../auth/identity';
-import { getShareChargeApp } from '../config/appConfig';
 
 const ShareChargeContext = createContext(null);
 
@@ -17,25 +18,15 @@ function addEvent(draft, text, type = 'activity') {
   draft.events = draft.events.slice(0, 20);
 }
 
-function activePortalForApi() {
-  const app = getShareChargeApp();
-  if (app === 'client') return SHARECHARGE_ROLE_KEYS.client;
-  if (app === 'provider') return SHARECHARGE_ROLE_KEYS.provider;
-  if (app === 'ops') return SHARECHARGE_ROLE_KEYS.system;
-  const sessions = loadAuthSessions();
-  if (sessions[SHARECHARGE_ROLE_KEYS.system]?.verified) return SHARECHARGE_ROLE_KEYS.system;
-  if (sessions[SHARECHARGE_ROLE_KEYS.provider]?.verified) return SHARECHARGE_ROLE_KEYS.provider;
-  if (sessions[SHARECHARGE_ROLE_KEYS.client]?.verified) return SHARECHARGE_ROLE_KEYS.client;
-  return SHARECHARGE_ROLE_KEYS.client;
-}
-
-function portalUsesOfflineDemo(portal = activePortalForApi()) {
+function portalUsesOfflineDemo(portal) {
   return !!loadAuthSessions()[portal]?.offlineDemo;
 }
 
 export function ShareChargeProvider({ children }) {
+  const location = useLocation();
+  const apiPortal = resolveApiPortal(location);
   const repositoryMode = getPreferredRepositoryMode();
-  const useApi = repositoryMode === 'api' && !portalUsesOfflineDemo();
+  const useApi = repositoryMode === 'api' && !portalUsesOfflineDemo(apiPortal);
 
   const [state, setState] = useState(() => {
     if (repositoryMode === 'api' && !portalUsesOfflineDemo()) return getInitialAppState();
@@ -67,7 +58,7 @@ export function ShareChargeProvider({ children }) {
     setSyncError(null);
   }, [useApi]);
 
-  const refreshFromApi = useCallback(async (portal = activePortalForApi()) => {
+  const refreshFromApi = useCallback(async (portal = apiPortal) => {
     if (!useApi) return;
     try {
       setSyncError(null);
@@ -75,23 +66,29 @@ export function ShareChargeProvider({ children }) {
       setState(next);
     } catch (err) {
       console.error('ShareCharge API sync failed', err);
-      setSyncError(err.message || 'Sync failed');
+      if (err.status === 401) {
+        clearAuthSession(portal);
+        setSyncError('הסשן פג — התחברו שוב עם OTP');
+      } else {
+        setSyncError(formatShareChargeApiError(err) || 'סנכרון נכשל');
+      }
     } finally {
       setLoading(false);
     }
-  }, [useApi]);
+  }, [useApi, apiPortal]);
 
   useEffect(() => {
     if (!useApi) return undefined;
-    const portal = activePortalForApi();
-    if (!getStoredToken(portal)) {
+    if (!getStoredToken(apiPortal)) {
       setLoading(false);
+      setSyncError(null);
       return undefined;
     }
-    refreshFromApi();
-    const id = setInterval(() => refreshFromApi(), 5000);
+    setLoading(true);
+    refreshFromApi(apiPortal);
+    const id = setInterval(() => refreshFromApi(apiPortal), 5000);
     return () => clearInterval(id);
-  }, [useApi, refreshFromApi]);
+  }, [useApi, apiPortal, refreshFromApi]);
 
   useEffect(() => {
     if (useApi) return undefined;
@@ -143,7 +140,7 @@ export function ShareChargeProvider({ children }) {
       },
       syncSessionProfiles: () => {
         if (useApi) {
-          refreshFromApi(activePortalForApi());
+          refreshFromApi(apiPortal);
           return;
         }
         update((draft) => {
@@ -389,7 +386,7 @@ export function ShareChargeProvider({ children }) {
         });
       },
     }),
-    [state, loading, syncError, refreshFromApi, repositoryMode, useApi],
+    [state, loading, syncError, refreshFromApi, repositoryMode, useApi, apiPortal],
   );
 
   return <ShareChargeContext.Provider value={value}>{children}</ShareChargeContext.Provider>;
