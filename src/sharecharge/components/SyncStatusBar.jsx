@@ -1,6 +1,7 @@
 import { Cloud, CloudOff, Loader2, Unplug } from 'lucide-react';
 import { useShareCharge } from '../context/ShareChargeContext';
 import { loadAuthSessions } from '../auth/session';
+import { getStoredToken } from '../data/sharechargeApi';
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
 import { getShareChargeApp, isSingleAppBuild } from '../config/appConfig';
 
@@ -17,7 +18,10 @@ function activePortal() {
 
 export function SyncStatusBar() {
   const { repositoryMode, loading, syncError } = useShareCharge();
-  const offlineDemo = !!loadAuthSessions()[activePortal()]?.offlineDemo;
+  const portal = activePortal();
+  const session = loadAuthSessions()[portal];
+  const offlineDemo = !!session?.offlineDemo;
+  const hasApiSession = !!(session?.token || getStoredToken(portal));
 
   if (repositoryMode !== 'api' || offlineDemo) {
     return (
@@ -42,6 +46,15 @@ export function SyncStatusBar() {
       <div className="sc-sync-bar flex items-center justify-center gap-2 border-b border-red-100 bg-red-50/90 px-4 py-2 text-xs font-bold text-red-600">
         <CloudOff size={14} />
         {syncError} — ודאו שה-API פועל
+      </div>
+    );
+  }
+
+  if (!hasApiSession) {
+    return (
+      <div className="sc-sync-bar flex items-center justify-center gap-2 border-b border-amber-100 bg-amber-50/95 px-4 py-2 text-[11px] font-bold leading-5 text-amber-800">
+        <Cloud size={12} />
+        מצב API — התחברו עם OTP (ודאו ש-/api/health מחזיר JSON)
       </div>
     );
   }

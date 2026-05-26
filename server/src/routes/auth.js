@@ -30,8 +30,12 @@ router.post('/otp/send', async (req, res) => {
       devCode: process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP === 'true' ? code : undefined,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to send OTP' });
+    console.error('[OTP send]', err);
+    const expose = process.env.ALLOW_DEV_OTP === 'true' || process.env.NODE_ENV !== 'production';
+    res.status(500).json({
+      error: 'Failed to send OTP',
+      detail: expose ? err.message : undefined,
+    });
   }
 });
 

@@ -180,7 +180,8 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
   }
 
   if (!res.ok) {
-    const err = new Error(data?.error || res.statusText || 'Request failed');
+    const detail = data?.detail || data?.error;
+    const err = new Error(detail || res.statusText || 'Request failed');
     err.status = res.status;
     err.data = data;
     throw err;

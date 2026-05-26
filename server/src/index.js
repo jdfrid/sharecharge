@@ -51,6 +51,21 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'sharecharge-api', port: PORT });
 });
 
+app.get('/api/health/db', async (_req, res) => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ ok: false, error: 'DATABASE_URL is not set' });
+    }
+    await query('SELECT 1 AS ok');
+    const { rows } = await query(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'auth_otps') AS ready",
+    );
+    return res.json({ ok: true, db: true, authOtpsTable: rows[0]?.ready === true });
+  } catch (err) {
+    return res.status(503).json({ ok: false, error: err.message || 'Database unavailable' });
+  }
+});
+
 app.use('/api/sharecharge/auth', authRoutes);
 app.use('/api/sharecharge/stations', stationRoutes);
 app.use('/api/sharecharge/bookings', bookingRoutes);
@@ -64,14 +79,14 @@ if (hasPublic) {
 }
 
 async function boot() {
+  if (!process.env.DATABASE_URL && process.env.USE_PG_MEM !== 'true') {
+    throw new Error('DATABASE_URL is required in production');
+  }
+
   if (process.env.AUTO_MIGRATE !== 'false') {
-    try {
-      await migrate();
-      if (process.env.AUTO_SEED !== 'false') {
-        await seed();
-      }
-    } catch (err) {
-      console.warn('DB migrate/seed skipped or failed:', err.message);
+    await migrate();
+    if (process.env.AUTO_SEED !== 'false') {
+      await seed();
     }
   }
 
@@ -80,4 +95,7 @@ async function boot() {
   });
 }
 
-boot();
+boot().catch((err) => {
+  console.error('Boot failed:', err);
+  process.exit(1);
+});
