@@ -1,0 +1,203 @@
+import { useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { ChevronLeft, MapPin, Search, Wrench } from 'lucide-react';
+import { useShareCharge } from '../../context/ShareChargeContext';
+import { SERVICE_CATEGORIES, driverLocationProfiles } from '../../constants';
+import { useClientLocation } from '../../hooks/useClientLocation';
+import { distanceToStation } from '../../utils/geo';
+import { formatShareChargeApiError } from '../../data/sharechargeApi';
+import { Card } from '../../components/ui/Card';
+
+export function ClientServiceBrowsePage() {
+  const { category } = useParams();
+  const meta = SERVICE_CATEGORIES[category];
+  const { state } = useShareCharge();
+  const navigate = useNavigate();
+  const gps = useClientLocation(true);
+  const [query, setQuery] = useState('');
+  const [locationId, setLocationId] = useState('current');
+  const [maxDistance, setMaxDistance] = useState(50);
+
+  if (!meta) return <Navigate to="/client/discover" replace />;
+
+  const origin = useMemo(() => {
+    if (locationId === 'current' && gps.lat != null) return { lat: gps.lat, lng: gps.lng };
+    const profile = driverLocationProfiles.find((p) => p.id === locationId);
+    if (profile?.lat != null) return { lat: profile.lat, lng: profile.lng };
+    return null;
+  }, [locationId, gps.lat, gps.lng]);
+
+  const getDistance = (item) => {
+    if (origin) return distanceToStation(item, origin);
+    return Number(item.distance) || 999;
+  };
+
+  const items = useMemo(
+    () =>
+      state.stations
+        .filter((s) => (s.serviceCategory || 'charging') === category && s.available)
+        .filter((s) => {
+          const term = query.trim();
+          return !term || `${s.name} ${s.address} ${s.plug}`.includes(term);
+        })
+        .filter((s) => getDistance(s) <= maxDistance)
+        .sort((a, b) => getDistance(a) - getDistance(b)),
+    [state.stations, category, query, maxDistance, origin],
+  );
+
+  return (
+    <>
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        <Link to="/client/discover" className="shrink-0 rounded-full border border-sc-border bg-white px-4 py-2 text-xs font-black text-sc-muted">
+          ← טעינה
+        </Link>
+        {Object.values(SERVICE_CATEGORIES)
+          .filter((c) => c.id !== 'charging')
+          .map((c) => (
+            <Link
+              key={c.id}
+              to={c.path}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-black ${
+                c.id === category ? 'bg-[var(--sc-accent)] text-white' : 'border border-sc-border bg-white text-sc-muted'
+              }`}
+            >
+              {c.label}
+            </Link>
+          ))}
+      </div>
+
+      <Card>
+        <h2 className="text-xl font-black">{meta.discoverTitle}</h2>
+        <p className="mt-1 text-sm font-bold text-sc-muted">חיפוש לפי הסביבה שלך · הזמנת שירות כמו בטעינה</p>
+        <div className="mt-4 flex items-center gap-2 rounded-sc-md border border-sc-border bg-white px-3 py-3">
+          <Search size={18} className="text-sc-muted" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="חיפוש לפי שם או כתובת..."
+            className="w-full border-0 bg-transparent text-sm font-bold outline-none"
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <label className="text-[11px] font-bold text-sc-muted">
+            נקודת ייחוס
+            <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="mt-1 w-full rounded-sc-md border border-sc-border px-2 py-2 text-sm font-black">
+              {driverLocationProfiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[11px] font-bold text-sc-muted">
+            מרחק מקסימלי
+            <select value={maxDistance} onChange={(e) => setMaxDistance(Number(e.target.value))} className="mt-1 w-full rounded-sc-md border border-sc-border px-2 py-2 text-sm font-black">
+              <option value={5}>5 ק״מ</option>
+              <option value={15}>15 ק״מ</option>
+              <option value={50}>50 ק״מ</option>
+            </select>
+          </label>
+        </div>
+        {locationId === 'current' && gps.error ? (
+          <p className="mt-2 text-xs font-bold text-amber-700">{gps.error} — אפשרו GPS או בחרו נקודת ייחוס.</p>
+        ) : null}
+      </Card>
+
+      {items.length === 0 ? (
+        <Card>
+          <p className="text-center text-sm font-bold text-sc-muted">לא נמצאו עסקים בטווח — הרחיבו מרחק או נקו חיפוש.</p>
+        </Card>
+      ) : (
+        items.map((item) => (
+          <Card key={item.id}>
+            <button type="button" onClick={() => navigate(`/client/services/${category}/${item.id}`)} className="w-full text-right">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--sc-accent)]/10 text-[var(--sc-accent)]">
+                  <Wrench size={22} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-black">{item.name}</h3>
+                  <p className="mt-1 flex items-center gap-1 text-sm text-sc-muted">
+                    <MapPin size={14} /> {item.address}
+                  </p>
+                  <p className="mt-2 text-xs font-bold text-sc-muted">
+                    {getDistance(item).toFixed(1)} km · ₪{item.pricePerKwh} · {item.plug}
+                  </p>
+                  <p className="mt-1 text-[11px] text-sc-muted" dir="ltr">
+                    📍 {item.lat?.toFixed(5)}, {item.lng?.toFixed(5)}
+                  </p>
+                </div>
+                <ChevronLeft className="shrink-0 text-[var(--sc-accent)]" />
+              </div>
+            </button>
+          </Card>
+        ))
+      )}
+    </>
+  );
+}
+
+export function ClientServiceBookPage() {
+  const { category, stationId } = useParams();
+  const meta = SERVICE_CATEGORIES[category];
+  const navigate = useNavigate();
+  const { state, createBooking } = useShareCharge();
+  const station = state.stations.find((s) => s.id === stationId && (s.serviceCategory || 'charging') === category);
+  const [selectedTime, setSelectedTime] = useState('19:30');
+  const [durationHours, setDurationHours] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  if (!meta) return <Navigate to="/client/discover" replace />;
+  if (!station) return <Navigate to={meta.path} replace />;
+
+  const handleConfirm = async () => {
+    setBusy(true);
+    setSubmitError('');
+    try {
+      await createBooking({ stationId: station.id, startTime: selectedTime, durationHours });
+      navigate('/client/activity', { replace: true });
+    } catch (err) {
+      setSubmitError(formatShareChargeApiError(err, 'booking'));
+      if (err.status === 401) setTimeout(() => navigate('/client/entry', { replace: true }), 2000);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Link to={meta.path} className="mb-2 inline-flex items-center gap-1 text-sm font-black text-[var(--sc-accent)]">
+        <ChevronLeft size={18} /> חזרה לרשימה
+      </Link>
+      <Card>
+        <h1 className="text-xl font-black">{station.name}</h1>
+        <p className="mt-1 text-sm font-bold text-sc-muted">{station.address}</p>
+        <p className="mt-2 text-xs font-bold text-sc-muted" dir="ltr">
+          מיקום מדויק: {station.lat}, {station.lng}
+        </p>
+        <p className="mt-3 text-sm text-sc-muted">{station.termsText}</p>
+      </Card>
+      <Card>
+        <h2 className="mb-3 font-black">הזמנת {meta.label}</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm font-bold text-sc-muted">
+            שעה משוערת
+            <input value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} className="sc-field mt-2 text-sm" />
+          </label>
+          <label className="text-sm font-bold text-sc-muted">
+            משך (שעות)
+            <select value={durationHours} onChange={(e) => setDurationHours(Number(e.target.value))} className="sc-field mt-2 text-sm">
+              <option value={1}>שעה</option>
+              <option value={2}>שעתיים</option>
+              <option value={3}>3 שעות</option>
+            </select>
+          </label>
+        </div>
+        <p className="mt-3 text-xs text-sc-muted">מחיר משוער: ₪{station.pricePerKwh * durationHours}</p>
+        <button type="button" onClick={handleConfirm} disabled={busy} className="sc-btn-primary mt-4 w-full disabled:opacity-60">
+          {busy ? 'שולח…' : 'שלח בקשת שירות לספק'}
+        </button>
+        {submitError ? <p className="mt-3 text-sm font-bold text-red-600">{submitError}</p> : null}
+      </Card>
+    </>
+  );
+}

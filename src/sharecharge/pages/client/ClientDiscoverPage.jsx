@@ -1,5 +1,5 @@
 import { useMemo, useState, lazy, Suspense } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BatteryCharging,
   ChevronLeft,
@@ -10,8 +10,10 @@ import {
   Zap,
 } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
-import { driverLocationProfiles } from '../../constants';
+import { SERVICE_NAV_LINKS, driverLocationProfiles } from '../../constants';
+import { useClientLocation } from '../../hooks/useClientLocation';
 import { resolveDriverIdForSession } from '../../auth/identity';
+import { distanceToStation } from '../../utils/geo';
 import { shortTime } from '../../utils';
 import { Card } from '../../components/ui/Card';
 
@@ -28,24 +30,36 @@ export function ClientDiscoverPage() {
   const [view, setView] = useState('list');
   const [mapSelectedId, setMapSelectedId] = useState(null);
   const [refreshedAt, setRefreshedAt] = useState(() => Date.now());
+  const gps = useClientLocation(locationId === 'current');
 
   const myDriverId = useMemo(() => resolveDriverIdForSession(state), [state.users]);
   const me = state.users.find((u) => u.id === myDriverId);
   const driverBookings = state.bookings.filter((item) => item.driverId === myDriverId);
   const activeBooking = driverBookings.find((item) => !['completed', 'rejected', 'cancelled'].includes(item.status));
   const locationProfile = driverLocationProfiles.find((item) => item.id === locationId) || driverLocationProfiles[0];
-  const getDistance = (station) => Math.max(0.1, Number(station.distance || 1) + locationProfile.distanceOffset);
+
+  const origin = useMemo(() => {
+    if (locationId === 'current' && gps.lat != null) return { lat: gps.lat, lng: gps.lng };
+    if (locationProfile.lat != null) return { lat: locationProfile.lat, lng: locationProfile.lng };
+    return null;
+  }, [locationId, gps.lat, gps.lng, locationProfile.lat, locationProfile.lng]);
+
+  const getDistance = (station) => {
+    if (origin) return distanceToStation(station, origin);
+    return Math.max(0.1, Number(station.distance || 1) + (locationProfile.distanceOffset || 0));
+  };
 
   const filteredStations = useMemo(
     () =>
       state.stations
+        .filter((station) => (station.serviceCategory || 'charging') === 'charging')
         .filter((station) => {
           const term = query.trim();
           const matchesSearch = !term || `${station.name} ${station.address} ${station.plug}`.includes(term);
           return station.available && matchesSearch && getDistance(station) <= maxDistance;
         })
         .sort((a, b) => getDistance(a) - getDistance(b)),
-    [state.stations, query, maxDistance, locationId],
+    [state.stations, query, maxDistance, origin],
   );
 
   const openStation = (id) => {
@@ -54,6 +68,18 @@ export function ClientDiscoverPage() {
 
   return (
     <>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {SERVICE_NAV_LINKS.map((link) => (
+          <NavLink
+            key={link.id}
+            to={link.path}
+            className="rounded-sc-md border border-white/90 bg-white/80 py-3 text-center text-xs font-black text-[var(--sc-accent)] shadow-sm backdrop-blur-md"
+          >
+            {link.label}
+          </NavLink>
+        ))}
+      </div>
+
       <Card>
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#007bff]/15 to-[#00d1c1]/20 text-[var(--sc-accent)]">
@@ -64,7 +90,7 @@ export function ClientDiscoverPage() {
               שלום <span className="font-black text-sc-text">{me?.name || 'לקוח'}</span>
             </p>
             {me?.email ? <p className="mt-0.5 truncate text-xs text-sc-muted" dir="ltr">{me.email}</p> : null}
-            <h2 className="mt-1 text-xl font-black leading-tight text-sc-text">עמדות בסביבה</h2>
+            <h2 className="mt-1 text-xl font-black leading-tight text-sc-text">עמדות לידך</h2>
           </div>
         </div>
         {activeBooking && (
@@ -120,10 +146,19 @@ export function ClientDiscoverPage() {
           </label>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-sc-muted">
-          <span>{locationProfile.note}</span>
+          <span>
+            {locationId === 'current' && gps.loading
+              ? 'מאתר GPS…'
+              : locationId === 'current' && gps.error
+                ? gps.error
+                : locationProfile.note}
+          </span>
           <button
             type="button"
-            onClick={() => setRefreshedAt(Date.now())}
+            onClick={() => {
+              setRefreshedAt(Date.now());
+              if (locationId === 'current') gps.refresh();
+            }}
             className="rounded-full border border-sc-border bg-white px-3 py-1 font-black text-sc-text shadow-sm"
           >
             עדכן סביבה · {shortTime(refreshedAt)}
@@ -208,6 +243,9 @@ export function ClientDiscoverPage() {
                     <span className="rounded-md border border-sc-border bg-sc-surface px-2 py-1">{station.plug}</span>
                     <span className="rounded-md border border-sc-border bg-sc-surface px-2 py-1">₪{station.pricePerKwh}/kWh</span>
                   </div>
+                  <p className="mt-1 text-[10px] font-bold text-sc-muted" dir="ltr">
+                    📍 {Number(station.lat).toFixed(5)}, {Number(station.lng).toFixed(5)}
+                  </p>
                   {station.termsText ? (
                     <p className="mt-2 line-clamp-2 border-t border-sc-border pt-2 text-xs text-sc-muted">
                       <span className="font-black text-sc-text">תנאים: </span>

@@ -2,15 +2,21 @@ import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 import { addEvent } from '../services/stateService.js';
+import { haversineKm } from '../geo.js';
 import { rowToStation } from '../utils.js';
 
 const router = Router();
 
 router.get('/', authRequired, async (req, res) => {
   try {
-    const { lat, lng, radius = 50, q } = req.query;
+    const { lat, lng, radius = 50, q, category } = req.query;
     let sql = 'SELECT * FROM stations WHERE available = true';
     const params = [];
+
+    if (category) {
+      params.push(String(category));
+      sql += ` AND service_category = $${params.length}`;
+    }
 
     if (q) {
       params.push(`%${q}%`);
@@ -84,15 +90,5 @@ router.patch('/:id', authRequired, requireRole('host', 'admin'), async (req, res
     res.status(500).json({ error: 'Update failed' });
   }
 });
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 export default router;

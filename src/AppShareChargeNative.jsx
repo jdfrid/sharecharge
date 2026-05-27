@@ -7,6 +7,7 @@ import { ShareChargeRoleEntry } from './sharecharge/pages/ShareChargeRoleEntry';
 import { ClientShell, OpsShell, ProviderShell } from './sharecharge/pages/shells/AppShells';
 import { ClientDiscoverPage } from './sharecharge/pages/client/ClientDiscoverPage';
 import { ClientStationPage } from './sharecharge/pages/client/ClientStationPage';
+import { ClientServiceBrowsePage, ClientServiceBookPage } from './sharecharge/pages/client/ClientServicesPages';
 import { ClientActivityPage } from './sharecharge/pages/client/ClientActivityPage';
 import { ProviderDashboardPage } from './sharecharge/pages/provider/ProviderDashboardPage';
 import { ProviderOrdersPage } from './sharecharge/pages/provider/ProviderOrdersPage';
@@ -26,6 +27,8 @@ function nativeRouteElements() {
               <Route path="/client" element={<Navigate to="/client/discover" replace />} />
               <Route path="/client/discover" element={<ClientDiscoverPage />} />
               <Route path="/client/station/:stationId" element={<ClientStationPage />} />
+              <Route path="/client/services/:category" element={<ClientServiceBrowsePage />} />
+              <Route path="/client/services/:category/:stationId" element={<ClientServiceBookPage />} />
               <Route path="/client/activity" element={<ClientActivityPage />} />
             </Route>
           </Route>

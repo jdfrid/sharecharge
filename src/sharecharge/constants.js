@@ -63,7 +63,44 @@ export const roleEntryConfig = {
 };
 
 export const driverLocationProfiles = [
-  { id: 'current', label: 'המיקום שלי עכשיו', distanceOffset: 0, note: 'GPS פעיל' },
-  { id: 'office', label: 'משרד בתל אביב', distanceOffset: 0.6, note: 'סימולציית מיקום' },
-  { id: 'home', label: 'בית ברמת השרון', distanceOffset: -0.3, note: 'סימולציית מיקום' },
+  { id: 'current', label: 'המיקום שלי (GPS)', distanceOffset: 0, note: 'מיקום אמיתי מהמכשיר' },
+  { id: 'office', label: 'משרד בתל אביב', lat: 32.0853, lng: 34.7818, distanceOffset: 0, note: 'נקודת ייחוס לדוגמה' },
+  { id: 'home', label: 'בית ברמת השרון', lat: 32.1378, lng: 34.8403, distanceOffset: 0, note: 'נקודת ייחוס לדוגמה' },
+];
+
+export const SERVICE_CATEGORIES = {
+  charging: {
+    id: 'charging',
+    label: 'טעינה',
+    path: '/client/discover',
+    discoverTitle: 'עמדות טעינה',
+    unitLabel: 'kWh',
+  },
+  bakery: {
+    id: 'bakery',
+    label: 'פנצריה',
+    path: '/client/services/bakery',
+    discoverTitle: 'פנצריות בסביבה',
+    unitLabel: 'מוצר',
+  },
+  tow: {
+    id: 'tow',
+    label: 'גרר',
+    path: '/client/services/tow',
+    discoverTitle: 'שירותי גרירה',
+    unitLabel: 'קריאה',
+  },
+  garage: {
+    id: 'garage',
+    label: 'מוסך',
+    path: '/client/services/garage',
+    discoverTitle: 'מוסכים בסביבה',
+    unitLabel: 'שעה',
+  },
+};
+
+export const SERVICE_NAV_LINKS = [
+  SERVICE_CATEGORIES.bakery,
+  SERVICE_CATEGORIES.tow,
+  SERVICE_CATEGORIES.garage,
 ];

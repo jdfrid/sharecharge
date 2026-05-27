@@ -6,8 +6,10 @@ import {
   getBookingRowMem,
   listBookingsMem,
   openDisputeMem,
+  updateBookingLocationMem,
   updateBookingMem,
 } from '../devDataStore.js';
+import { haversineKm, isWithinStationGeofence } from '../geo.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 import { addEvent, getSettings } from '../services/stateService.js';
 import { createId, createOtp, rowToBooking } from '../utils.js';
@@ -277,6 +279,60 @@ router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) =
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Finish failed' });
+  }
+});
+
+router.post('/:id/location', authRequired, requireRole('driver'), async (req, res) => {
+  try {
+    const { lat, lng } = req.body || {};
+    if (lat == null || lng == null) return res.status(400).json({ error: 'Missing coordinates' });
+
+    if (!dbReady(req)) {
+      const result = updateBookingLocationMem(req.params.id, req.user.sub, { lat, lng });
+      if (result.error === 'not_found') return res.status(404).json({ error: 'Not found' });
+      if (result.error === 'forbidden') return res.status(403).json({ error: 'Forbidden' });
+      return res.json(result);
+    }
+
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
+    const booking = rows[0];
+    if (!booking) return res.status(404).json({ error: 'Not found' });
+    if (booking.driver_id !== req.user.sub) return res.status(403).json({ error: 'Forbidden' });
+
+    const { rows: stRows } = await query('SELECT * FROM stations WHERE id = $1', [booking.station_id]);
+    const station = stRows[0];
+    if (!station) return res.status(404).json({ error: 'Station not found' });
+
+    const atStation = isWithinStationGeofence(lat, lng, station.lat, station.lng);
+    const now = Date.now();
+    let checkInAt = booking.check_in_at ? Number(booking.check_in_at) : null;
+    if (atStation && !checkInAt) checkInAt = now;
+
+    let dwellExceeded = !!booking.dwell_exceeded;
+    if (checkInAt && atStation && now > checkInAt + Number(booking.duration_hours) * 3600000) {
+      dwellExceeded = true;
+    }
+
+    await query(
+      `UPDATE bookings SET last_driver_lat = $1, last_driver_lng = $2, last_location_at = $3,
+       check_in_at = COALESCE(check_in_at, $4), dwell_exceeded = $5 WHERE id = $6`,
+      [lat, lng, now, atStation ? now : null, dwellExceeded, booking.id],
+    );
+
+    if (dwellExceeded && !booking.dwell_exceeded) {
+      await addEvent(`חריגת זמן שהייה — הזמנה ${booking.id}`, 'warning', true);
+    }
+
+    const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
+    return res.json({
+      booking: rowToBooking(updated),
+      atStation,
+      dwellExceeded,
+      distanceKm: haversineKm(Number(lat), Number(lng), Number(station.lat), Number(station.lng)),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Location update failed' });
   }
 });
 

@@ -1,4 +1,5 @@
 import { listMemUsers, loadMemUserByEmail, saveMemUser } from './devAuthStore.js';
+import { isWithinStationGeofence } from './geo.js';
 import { createId, createOtp, rowToBooking, rowToDispute, rowToStation, rowToTransaction, rowToUser } from './utils.js';
 
 const settings = {
@@ -31,6 +32,7 @@ const seedStations = [
     rating: 4.9,
     photos: 6,
     terms_text: 'גישה לעמדה מהחניה · נא לתאם זמן הגעה',
+    service_category: 'charging',
     created_at: Date.now(),
   },
   {
@@ -48,6 +50,7 @@ const seedStations = [
     rating: 4.8,
     photos: 4,
     terms_text: 'חניה צרה — נא להקפיד על פתיחת מראות',
+    service_category: 'charging',
     created_at: Date.now(),
   },
   {
@@ -65,6 +68,97 @@ const seedStations = [
     rating: 4.7,
     photos: 3,
     terms_text: 'CCS בלבד · שעות שקט 22:00–07:00',
+    service_category: 'charging',
+    created_at: Date.now(),
+  },
+  {
+    id: 'bakery-1',
+    host_id: 'host-1',
+    name: 'פנזריה רוזן',
+    address: 'אחוזה 12, רמת השרון',
+    lat: 32.1395,
+    lng: 34.8395,
+    distance: 0.9,
+    power: 0,
+    plug: 'מגשים',
+    price_per_kwh: 45,
+    available: true,
+    rating: 4.8,
+    photos: 5,
+    terms_text: 'הזמנה מראש · איסוף בחנות',
+    service_category: 'bakery',
+    created_at: Date.now(),
+  },
+  {
+    id: 'bakery-2',
+    host_id: 'host-2',
+    name: 'מאפיית השכונה',
+    address: 'דיזנגoff 88, תל אביב',
+    lat: 32.0785,
+    lng: 34.7745,
+    distance: 1.8,
+    power: 0,
+    plug: 'מארזים',
+    price_per_kwh: 38,
+    available: true,
+    rating: 4.6,
+    photos: 4,
+    terms_text: 'מינימום הזמנה ₪80',
+    service_category: 'bakery',
+    created_at: Date.now(),
+  },
+  {
+    id: 'tow-1',
+    host_id: 'host-2',
+    name: 'גרר מהיר 24/7',
+    address: 'המסגר 5, הרצליה',
+    lat: 32.164,
+    lng: 34.846,
+    distance: 2.3,
+    power: 0,
+    plug: 'גרירה',
+    price_per_kwh: 180,
+    available: true,
+    rating: 4.9,
+    photos: 3,
+    terms_text: 'הגעה עד 40 דק׳ · תשלום לפי ק״מ',
+    service_category: 'tow',
+    created_at: Date.now(),
+  },
+  {
+    id: 'garage-1',
+    host_id: 'host-1',
+    name: 'מוסך אלון',
+    address: 'החרושת 3, רamat השרון',
+    lat: 32.1365,
+    lng: 34.8425,
+    distance: 1.1,
+    power: 0,
+    plug: 'תיקון',
+    price_per_kwh: 95,
+    available: true,
+    rating: 4.7,
+    photos: 4,
+    terms_text: 'אבחון + תיקון · תיאום מראש',
+    service_category: 'garage',
+    created_at: Date.now(),
+  },
+  {
+    id: 'garage-2',
+    host_id: 'host-2',
+    name: 'מוסך מרכז',
+    address: 'הנגר 20, תל אביב',
+    lat: 32.082,
+    lng: 34.785,
+    distance: 1.6,
+    power: 0,
+    plug: 'שירות',
+    price_per_kwh: 110,
+    available: true,
+    rating: 4.5,
+    photos: 2,
+    terms_text: 'טיפולים, צמיגים, מיזוג',
+    service_category: 'garage',
     created_at: Date.now(),
   },
 ];
@@ -222,6 +316,11 @@ export function createBookingMem(jwtUser, { stationId, startTime, durationHours 
     platform_fee: 0,
     driver_confirmed_start: false,
     host_confirmed_connection: false,
+    check_in_at: null,
+    last_driver_lat: null,
+    last_driver_lng: null,
+    last_location_at: null,
+    dwell_exceeded: false,
   };
   bookings.unshift(row);
   addEventMem(`הזמנה מ${driver.name} (${driver.email}) → ${station.name}`);
@@ -311,4 +410,33 @@ export function openDisputeMem(bookingId, reason) {
   });
   addEventMem('נפתחה מחלוקת לטיפול מנהל', 'warning');
   return { ok: true, id };
+}
+
+export function updateBookingLocationMem(bookingId, driverId, { lat, lng }) {
+  if (!initialized) initMemDataStore();
+  const booking = bookings.find((row) => row.id === bookingId);
+  if (!booking) return { error: 'not_found' };
+  if (booking.driver_id !== driverId) return { error: 'forbidden' };
+
+  const station = stations.find((row) => row.id === booking.station_id);
+  if (!station) return { error: 'not_found' };
+
+  const atStation = isWithinStationGeofence(lat, lng, station.lat, station.lng);
+  const now = Date.now();
+  booking.last_driver_lat = lat;
+  booking.last_driver_lng = lng;
+  booking.last_location_at = now;
+  if (atStation && !booking.check_in_at) booking.check_in_at = now;
+  if (booking.check_in_at && atStation && now > Number(booking.check_in_at) + Number(booking.duration_hours) * 3600000) {
+    if (!booking.dwell_exceeded) {
+      addEventMem(`חריגת זמן שהייה — ${station.name}`, 'warning');
+    }
+    booking.dwell_exceeded = true;
+  }
+
+  return {
+    booking: rowToBooking(booking),
+    atStation,
+    dwellExceeded: booking.dwell_exceeded === true,
+  };
 }

@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Calendar,
   Clock,
   CreditCard,
 } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
+import { getPreferredRepositoryMode } from '../../data/apiRepository.stub';
+import { useBookingLocationWatch } from '../../hooks/useBookingLocationWatch';
 import { resolveDriverIdForSession } from '../../auth/identity';
 import { currency } from '../../utils';
 import { Card } from '../../components/ui/Card';
@@ -19,6 +22,10 @@ export function ClientActivityPage() {
   const activeBooking = driverBookings.find((item) => !['completed', 'rejected', 'cancelled'].includes(item.status));
   const completedBookings = driverBookings.filter((item) => item.status === 'completed');
   const stationFor = (booking) => state.stations.find((station) => station.id === booking.stationId);
+  const activeStation = activeBooking ? stationFor(activeBooking) : null;
+  const apiMode = getPreferredRepositoryMode() === 'api';
+
+  useBookingLocationWatch(activeBooking, activeStation, apiMode);
 
   const runAction = async (fn) => {
     setBusy(true);
@@ -41,9 +48,25 @@ export function ClientActivityPage() {
               <p className="text-sm font-black text-[var(--sc-accent-2)]">הזמנה פעילה</p>
               <h3 className="mt-1 text-xl font-black">{stationFor(activeBooking)?.name}</h3>
               <p className="mt-1 text-sm text-sc-muted">{stationFor(activeBooking)?.address}</p>
+              {activeStation?.lat ? (
+                <p className="mt-1 text-[10px] font-bold text-sc-muted" dir="ltr">
+                  📍 {Number(activeStation.lat).toFixed(5)}, {Number(activeStation.lng).toFixed(5)}
+                </p>
+              ) : null}
             </div>
             <StatusPill status={activeBooking.status} />
           </div>
+
+          {activeBooking.dwellExceeded ? (
+            <div className="mt-3 flex items-center gap-2 rounded-sc-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+              <AlertTriangle size={16} />
+              חרגתם מזמן השהייה שהוגדר — יש לעזוב את העמדה או לעדכן את הספק.
+            </div>
+          ) : null}
+
+          {activeBooking.checkInAt && !activeBooking.dwellExceeded ? (
+            <p className="mt-2 text-xs font-bold text-[var(--sc-accent-2)]">מיקום אומת ליד העמדה · מעקב GPS פעיל</p>
+          ) : null}
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
             <div className="rounded-sc-sm bg-white p-3 shadow-sm">

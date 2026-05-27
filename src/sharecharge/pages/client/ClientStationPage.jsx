@@ -62,6 +62,9 @@ export function ClientStationPage() {
               <MapPin size={16} className="mt-0.5 shrink-0" />
               {station.address}
             </p>
+            <p className="mt-1 text-[10px] font-bold text-sc-muted" dir="ltr">
+              מיקום מדויק: {Number(station.lat).toFixed(5)}, {Number(station.lng).toFixed(5)}
+            </p>
             {host ? (
               <p className="mt-2 text-xs font-bold text-sc-muted">
                 ספק: <span className="text-sc-text">{host.name}</span>

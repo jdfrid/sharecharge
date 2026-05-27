@@ -43,6 +43,7 @@ export function rowToStation(row) {
     rating: Number(row.rating),
     photos: row.photos,
     termsText: row.terms_text,
+    serviceCategory: row.service_category || 'charging',
     createdAt: row.created_at ? Number(row.created_at) : undefined,
   };
 }
@@ -73,6 +74,11 @@ export function rowToBooking(row) {
     otpVerifiedAt: row.otp_verified_at ? Number(row.otp_verified_at) : undefined,
     startedAt: row.started_at ? Number(row.started_at) : undefined,
     completedAt: row.completed_at ? Number(row.completed_at) : undefined,
+    checkInAt: row.check_in_at ? Number(row.check_in_at) : undefined,
+    lastDriverLat: row.last_driver_lat != null ? Number(row.last_driver_lat) : undefined,
+    lastDriverLng: row.last_driver_lng != null ? Number(row.last_driver_lng) : undefined,
+    lastLocationAt: row.last_location_at ? Number(row.last_location_at) : undefined,
+    dwellExceeded: row.dwell_exceeded === true,
   };
 }
 

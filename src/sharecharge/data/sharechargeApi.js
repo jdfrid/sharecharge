@@ -277,4 +277,6 @@ export const sharechargeApi = {
   addDriver: (portal, userData) => apiRequest('/ops/users/driver', { method: 'POST', body: userData, portal }),
   addStation: (portal, stationData) => apiRequest('/ops/stations', { method: 'POST', body: stationData, portal }),
   reset: (portal) => apiRequest('/ops/reset', { method: 'POST', portal }),
+  reportBookingLocation: (portal, id, coords) =>
+    apiRequest(`/bookings/${id}/location`, { method: 'POST', body: coords, portal }),
 };

@@ -13,16 +13,21 @@ function splitSqlStatements(sql) {
 }
 
 export async function migrate() {
-  const sqlPath = path.join(__dirname, '../../db/migrations/001_init.sql');
-  if (!fs.existsSync(sqlPath)) {
-    throw new Error(`Migration file missing: ${sqlPath}`);
+  const dir = path.join(__dirname, '../../db/migrations');
+  const files = fs
+    .readdirSync(dir)
+    .filter((name) => name.endsWith('.sql'))
+    .sort();
+
+  for (const file of files) {
+    const sqlPath = path.join(dir, file);
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    const statements = splitSqlStatements(sql);
+    for (const statement of statements) {
+      await query(`${statement};`);
+    }
+    console.log(`Migration ${file} applied (${statements.length} statements).`);
   }
-  const sql = fs.readFileSync(sqlPath, 'utf8');
-  const statements = splitSqlStatements(sql);
-  for (const statement of statements) {
-    await query(`${statement};`);
-  }
-  console.log(`Migration 001 applied (${statements.length} statements).`);
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
