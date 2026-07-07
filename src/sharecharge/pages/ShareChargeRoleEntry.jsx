@@ -7,6 +7,7 @@ import {
   checkApiHealth,
   formatShareChargeApiError,
   getApiOrigin,
+  registerAccount,
   sendOtp,
   verifyOtp,
 } from '../data/sharechargeApi';
@@ -15,7 +16,7 @@ import { clearAuthSession, isPortalSessionReady, sanitizePortalSession, setAuthS
 import { isSingleAppBuild, flavorLabel } from '../config/appConfig';
 
 const portalPaths = {
-  [SHARECHARGE_ROLE_KEYS.client]: '/client/discover',
+  [SHARECHARGE_ROLE_KEYS.client]: '/client/home',
   [SHARECHARGE_ROLE_KEYS.provider]: '/provider/dashboard',
   [SHARECHARGE_ROLE_KEYS.system]: '/ops/dashboard',
 };
@@ -32,6 +33,14 @@ export function ShareChargeRoleEntry({ portal }) {
   const apiOrigin = getApiOrigin();
 
   const [email, setEmail] = useState(config.email);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [serviceCategory, setServiceCategory] = useState('fuel');
+  const [stationAddress, setStationAddress] = useState('');
+  const [isSignup, setIsSignup] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState('');
+  const [devCode, setDevCode] = useState('');
   const [sentOtp, setSentOtp] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [authError, setAuthError] = useState('');
@@ -41,7 +50,7 @@ export function ShareChargeRoleEntry({ portal }) {
   const [serverOk, setServerOk] = useState(apiMode ? null : true);
   const [serverMessage, setServerMessage] = useState('');
 
-  const visibleCode = isOtpCode(sentOtp) ? sentOtp : isOtpCode(otpInput) ? otpInput : '';
+  const visibleCode = devCode || (isOtpCode(otpInput) ? otpInput : '');
 
   const probeServer = useCallback(async () => {
     if (!apiMode) {
@@ -66,6 +75,7 @@ export function ShareChargeRoleEntry({ portal }) {
     const code = createOtp();
     setSentOtp(code);
     setOtpInput(code);
+    setDevCode(code);
     setSentAt(Date.now());
     setAuthNotice(notice || 'מצב דemo מקומי — הקוד מוצג למטה.');
     setAuthError('');
@@ -131,9 +141,14 @@ export function ShareChargeRoleEntry({ portal }) {
       setAuthError('יש להזין כתובת מייל תקינה');
       return;
     }
+    if (isSignup && !name.trim()) {
+      setAuthError('יש להזין שם מלא');
+      return;
+    }
     setBusy(true);
     setAuthError('');
     setAuthNotice('');
+    setDevCode('');
     try {
       if (apiMode) {
         const reachable = serverOk === true ? true : await probeServer();
@@ -141,10 +156,22 @@ export function ShareChargeRoleEntry({ portal }) {
           setAuthError(serverMessage || 'השרver לא זמין — לא עוברים למצב דemo.');
           return;
         }
-        const data = await sendOtp(email, portal);
+        const data = isSignup
+          ? await registerAccount({
+              email,
+              portal,
+              name: name.trim(),
+              phone: phone.trim(),
+              businessName: businessName.trim(),
+              serviceCategory: portal === SHARECHARGE_ROLE_KEYS.provider ? serviceCategory : undefined,
+              stationAddress: portal === SHARECHARGE_ROLE_KEYS.provider ? stationAddress.trim() : undefined,
+            })
+          : await sendOtp(email, portal);
         const code = data.devCode || '';
         setSentOtp(code || 'sent');
         setOtpInput(code);
+        setDevCode(code);
+        setDeliveryMethod(data.deliveryMethod || '');
         setSentAt(Date.now());
         if (isOtpCode(code)) {
           setAuthNotice('קוד מהשרver — מאמתים אוטומטית…');
@@ -153,7 +180,11 @@ export function ShareChargeRoleEntry({ portal }) {
           setAuthNotice('הקוד התקבל — לחצו «אימות» אם לא נכנסתם אוטומטית.');
           return;
         }
-        setAuthNotice('הקוד נשלח — הזינו את הקוד מהמייל ולחצו «אימות».');
+        setAuthNotice(
+          data.deliveryMethod === 'email'
+            ? 'קוד נשלח למייל — הזינו אותו ולחצו «אימות».'
+            : 'הקוד נוצר — הזינו אותו ולחצו «אימות» (SMTP לא מוגדר בשרver).',
+        );
         return;
       }
       startLocalOtp('קוד דemo מקומי — לחצו «אימות» עם הקוד למטה.');
@@ -246,8 +277,59 @@ export function ShareChargeRoleEntry({ portal }) {
           ) : null}
 
           <div className="rounded-sc-lg border border-sc-border bg-white p-4 shadow-sc-card">
-            <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">קוד אימות</p>
-            <label className="text-xs font-bold text-sc-muted">
+            <div className="mb-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSignup(false)}
+                className={`flex-1 rounded-sc-sm py-2 text-xs font-black ${!isSignup ? 'bg-[var(--sc-accent)] text-white' : 'border border-sc-border bg-white'}`}
+              >
+                התחברות
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSignup(true)}
+                className={`flex-1 rounded-sc-sm py-2 text-xs font-black ${isSignup ? 'bg-[var(--sc-accent)] text-white' : 'border border-sc-border bg-white'}`}
+              >
+                הרשמה חדשה
+              </button>
+            </div>
+            <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">
+              {isSignup ? 'יצירת משתמש / ספק' : 'קוד אימות'}
+            </p>
+            {isSignup ? (
+              <>
+                <label className="text-xs font-bold text-sc-muted">
+                  שם מלא
+                  <input value={name} onChange={(e) => setName(e.target.value)} className="sc-field text-sm" disabled={busy} />
+                </label>
+                <label className="mt-2 block text-xs font-bold text-sc-muted">
+                  טלפון
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} className="sc-field text-sm" dir="ltr" disabled={busy} />
+                </label>
+                {portal === SHARECHARGE_ROLE_KEYS.provider ? (
+                  <>
+                    <label className="mt-2 block text-xs font-bold text-sc-muted">
+                      שם העסק
+                      <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="sc-field text-sm" disabled={busy} />
+                    </label>
+                    <label className="mt-2 block text-xs font-bold text-sc-muted">
+                      סוג שירות
+                      <select value={serviceCategory} onChange={(e) => setServiceCategory(e.target.value)} className="sc-field text-sm">
+                        <option value="fuel">דלק</option>
+                        <option value="puncture">פנצ&apos;ר</option>
+                        <option value="tow">גרר</option>
+                        <option value="garage">מוסך / מצבר</option>
+                      </select>
+                    </label>
+                    <label className="mt-2 block text-xs font-bold text-sc-muted">
+                      כתובת נקודת שירות
+                      <input value={stationAddress} onChange={(e) => setStationAddress(e.target.value)} className="sc-field text-sm" disabled={busy} />
+                    </label>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+            <label className="mt-2 block text-xs font-bold text-sc-muted">
               כתובת מייל
               <input
                 value={email}
@@ -264,10 +346,10 @@ export function ShareChargeRoleEntry({ portal }) {
               disabled={busy || (apiMode && serverOk === false)}
               className="sc-btn-primary mt-3 !text-sm disabled:opacity-60"
             >
-              {busy ? 'שולח…' : 'שלח קוד OTP'}
+              {busy ? 'שולח…' : isSignup ? 'הרשמה + שליחת קוד' : 'שלח קוד OTP'}
             </button>
 
-            {visibleCode ? (
+            {visibleCode && deliveryMethod !== 'email' ? (
               <div className="mt-3 rounded-sc-sm border border-sc-border bg-sc-surface p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">

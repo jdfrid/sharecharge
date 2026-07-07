@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 import { addEvent, loadFullState } from '../services/stateService.js';
+import { geocodeAddressIsrael, isDefaultTelAvivCoords } from '../services/geocodeService.js';
 import { createId, rowToStation, rowToUser } from '../utils.js';
 
 const router = Router();
@@ -77,6 +78,18 @@ router.post('/stations', authRequired, requireRole('admin'), async (req, res) =>
       return res.status(400).json({ error: 'Invalid station data' });
     }
     const id = createId('station');
+    let lat = Number(d.lat);
+    let lng = Number(d.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || isDefaultTelAvivCoords(lat, lng)) {
+      const geocoded = await geocodeAddressIsrael(d.address.trim());
+      if (geocoded) {
+        lat = geocoded.lat;
+        lng = geocoded.lng;
+      } else {
+        lat = Number.isFinite(lat) ? lat : 32.08;
+        lng = Number.isFinite(lng) ? lng : 34.78;
+      }
+    }
     await query(
       `INSERT INTO stations (id, host_id, name, address, lat, lng, distance, power, plug, price_per_kwh, available, rating, photos, terms_text, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,5,0,$11,$12)`,
@@ -85,8 +98,8 @@ router.post('/stations', authRequired, requireRole('admin'), async (req, res) =>
         d.hostId,
         d.name.trim(),
         d.address.trim(),
-        Number(d.lat) || 32.08,
-        Number(d.lng) || 34.78,
+        lat,
+        lng,
         Number(d.distance) || 1,
         Number(d.power) || 22,
         d.plug || 'Type 2',

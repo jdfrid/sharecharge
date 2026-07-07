@@ -9,6 +9,7 @@ import {
   saveMemUser,
 } from '../devAuthStore.js';
 import { createId, createOtp, PORTAL_TO_ROLE, rowToUser } from '../utils.js';
+import { deliverOtp, otpDeliveryConfigured } from '../services/otpDeliveryService.js';
 
 const router = Router();
 
@@ -19,11 +20,13 @@ function devOtpEnabled() {
   return false;
 }
 
-function respondOtp(res, { email, portal, code }) {
-  console.log(`[OTP] ${portal} ${email} → ${code}`);
+function respondOtp(res, { email, portal, code, delivery }) {
+  console.log(`[OTP] ${portal} ${email} → ${code} (${delivery?.channel || 'console'})`);
   res.json({
     ok: true,
     sentAt: Date.now(),
+    deliveryMethod: delivery?.channel || 'console',
+    deliveryConfigured: otpDeliveryConfigured(),
     devCode: devOtpEnabled() ? code : undefined,
   });
 }
@@ -53,7 +56,7 @@ async function loadOtp(email, portal, dbReady) {
   return loadMemOtp(email, portal);
 }
 
-async function resolveUser(normalizedEmail, expectedRole, dbReady) {
+async function resolveUser(normalizedEmail, expectedRole, dbReady, profile = {}) {
   if (dbReady) {
     let { rows: userRows } = await query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
     let user = userRows[0];
@@ -63,11 +66,12 @@ async function resolveUser(normalizedEmail, expectedRole, dbReady) {
         throw Object.assign(new Error('Admin account not provisioned'), { status: 403 });
       }
       const id = createId(expectedRole === 'host' ? 'host' : 'driver');
-      const name = normalizedEmail.split('@')[0];
+      const name = profile.name || normalizedEmail.split('@')[0];
+      const phone = profile.phone || null;
       await query(
-        `INSERT INTO users (id, name, email, role, verified, blocked, revenue, spend, created_at)
-         VALUES ($1, $2, $3, $4, true, false, 0, 0, $5)`,
-        [id, name, normalizedEmail, expectedRole, Date.now()],
+        `INSERT INTO users (id, name, email, phone, role, verified, blocked, revenue, spend, created_at)
+         VALUES ($1, $2, $3, $4, $5, true, false, 0, 0, $6)`,
+        [id, name, normalizedEmail, phone, expectedRole, Date.now()],
       );
       user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0];
     } else if (user.role !== expectedRole && expectedRole !== 'admin') {
@@ -94,8 +98,9 @@ async function resolveUser(normalizedEmail, expectedRole, dbReady) {
     }
     user = {
       id: createId(expectedRole === 'host' ? 'host' : 'driver'),
-      name: normalizedEmail.split('@')[0],
+      name: profile.name || normalizedEmail.split('@')[0],
       email: normalizedEmail,
+      phone: profile.phone || null,
       role: expectedRole,
       verified: true,
       blocked: false,
@@ -115,6 +120,98 @@ async function clearOtp(email, portal, dbReady) {
   }
   clearMemOtp(email, portal);
 }
+
+router.post('/register', async (req, res) => {
+  try {
+    const {
+      email,
+      portal,
+      name,
+      phone,
+      businessName,
+      serviceCategory,
+      stationAddress,
+      lat,
+      lng,
+    } = req.body || {};
+    const normalizedEmail = email?.toLowerCase()?.trim();
+    if (!normalizedEmail?.includes('@') || !PORTAL_TO_ROLE[portal] || !name?.trim()) {
+      return res.status(400).json({ error: 'Invalid registration payload' });
+    }
+    if (portal === 'system') {
+      return res.status(403).json({ error: 'Admin accounts must be provisioned by ops' });
+    }
+
+    const expectedRole = PORTAL_TO_ROLE[portal];
+    const dbReady = !!req.app.locals.dbReady;
+
+    if (dbReady) {
+      const { rows: existing } = await query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
+      if (existing[0] && existing[0].role !== expectedRole) {
+        return res.status(403).json({ error: `Account exists as ${existing[0].role}` });
+      }
+      if (!existing[0]) {
+        const id = createId(expectedRole === 'host' ? 'host' : 'driver');
+        await query(
+          `INSERT INTO users (id, name, email, phone, role, verified, blocked, revenue, spend, created_at)
+           VALUES ($1, $2, $3, $4, $5, false, false, 0, 0, $6)`,
+          [id, name.trim(), normalizedEmail, phone || null, expectedRole, Date.now()],
+        );
+      } else {
+        await query('UPDATE users SET name = $1, phone = COALESCE($2, phone) WHERE email = $3', [
+          name.trim(),
+          phone || null,
+          normalizedEmail,
+        ]);
+      }
+
+      if (expectedRole === 'host' && serviceCategory && stationAddress) {
+        const hostRow = (await query('SELECT id FROM users WHERE email = $1', [normalizedEmail])).rows[0];
+        const stationId = createId('station');
+        await query(
+          `INSERT INTO stations
+            (id, host_id, name, address, lat, lng, distance, power, plug, price_per_kwh, available, rating, photos, terms_text, service_category, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,0,0,'—',0,true,4.5,0,$7,$8,$9)`,
+          [
+            stationId,
+            hostRow.id,
+            businessName || name.trim(),
+            stationAddress,
+            Number(lat) || 31.78,
+            Number(lng) || 35.22,
+            'שירות חירום · נרשם באפליקציה',
+            serviceCategory,
+            Date.now(),
+          ],
+        );
+      }
+    } else if (devOtpEnabled()) {
+      saveMemUser({
+        id: createId(expectedRole === 'host' ? 'host' : 'driver'),
+        name: name.trim(),
+        email: normalizedEmail,
+        phone: phone || null,
+        role: expectedRole,
+        verified: false,
+        blocked: false,
+        revenue: 0,
+        spend: 0,
+        createdAt: Date.now(),
+      });
+    } else {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const code = createOtp();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await persistOtp(normalizedEmail, portal, code, expiresAt, dbReady);
+    const delivery = await deliverOtp({ email: normalizedEmail, portal, code });
+    respondOtp(res, { email: normalizedEmail, portal, code, delivery });
+  } catch (err) {
+    console.error('[register]', err);
+    res.status(500).json({ error: err.message || 'Registration failed' });
+  }
+});
 
 router.post('/otp/send', async (req, res) => {
   try {
@@ -136,7 +233,7 @@ router.post('/otp/send', async (req, res) => {
       console.warn('[OTP send] DB failed, using memory:', err.message);
     }
 
-    respondOtp(res, { email: normalizedEmail, portal, code });
+    respondOtp(res, { email: normalizedEmail, portal, code, delivery: await deliverOtp({ email: normalizedEmail, portal, code }) });
   } catch (err) {
     console.error('[OTP send]', err);
     res.status(500).json({
@@ -161,6 +258,9 @@ router.post('/otp/verify', async (req, res) => {
     }
 
     const user = await resolveUser(normalizedEmail, PORTAL_TO_ROLE[portal], dbReady);
+    if (dbReady) {
+      await query('UPDATE users SET verified = true WHERE id = $1', [user.id]);
+    }
     await clearOtp(normalizedEmail, portal, dbReady);
 
     const token = jwt.sign(

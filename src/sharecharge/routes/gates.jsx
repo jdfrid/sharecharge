@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { isPortalSessionReady, sanitizePortalSession } from '../auth/session';
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
 import { isSingleAppBuild, getShareChargeApp } from '../config/appConfig';
@@ -28,8 +28,12 @@ function usePortalGate(portal) {
 }
 
 export function ClientGate() {
+  const location = useLocation();
   const gate = usePortalGate(SHARECHARGE_ROLE_KEYS.client);
-  if (gate !== 'open') return <Navigate to="/client/entry" replace />;
+  if (gate !== 'open') {
+    const returnTo = `${location.pathname}${location.search}`;
+    return <Navigate to={`/client/auth?return=${encodeURIComponent(returnTo)}`} replace />;
+  }
   return <Outlet />;
 }
 

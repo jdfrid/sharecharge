@@ -17,7 +17,7 @@ export function ShareChargeSplash({ onDone }) {
     const t = setTimeout(() => {
       setVisible(false);
       onDone?.();
-    }, 1400);
+    }, 800);
     return () => clearTimeout(t);
   }, [onDone]);
 

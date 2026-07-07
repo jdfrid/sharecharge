@@ -7,6 +7,8 @@ import { formatShareChargeApiError, getAuthToken, getStoredToken, sharechargeApi
 import { getInitialAppState } from '../state/initialState';
 import { STORAGE_KEY, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { createId, createOtp, currency } from '../utils';
+import { buildDefaultSplits } from '../utils/paymentUtils';
+import { findActiveBookingForStation } from '../utils/stationAvailability';
 import { clearAuthSession, loadAuthSessions } from '../auth/session';
 import { resolveApiPortal } from '../auth/portal';
 import { ensureDriverUserForEmail } from '../auth/identity';
@@ -168,9 +170,21 @@ export function ShareChargeProvider({ children }) {
           }
         }
         let bookingId = '';
+        let localError = '';
         update((draft) => {
           const station = draft.stations.find((item) => item.id === stationId);
-          if (!station) return;
+          if (!station) {
+            localError = 'station_not_found';
+            return;
+          }
+          if (!station.available) {
+            localError = 'station_unavailable';
+            return;
+          }
+          if (findActiveBookingForStation(stationId, draft.bookings)) {
+            localError = 'station_occupied';
+            return;
+          }
           const sessionEmail = loadAuthSessions().client?.email;
           const driver = ensureDriverUserForEmail(draft, sessionEmail);
           bookingId = createId('booking');
@@ -195,6 +209,14 @@ export function ShareChargeProvider({ children }) {
           });
           addEvent(draft, `הזמנה מ${driver.name} (${driver.email || 'ללא מייל'}) → ${station.name}`);
         });
+        if (localError) {
+          const messages = {
+            station_not_found: 'עמדה לא נמצאה — רעננו את הרשימה',
+            station_unavailable: 'העמדה לא זמינה — הספק יכול לשחרר מלוח הבקרה',
+            station_occupied: 'העמדה תפוסה בהזמנה פעילה — נסו עמדה אחרת',
+          };
+          throw new Error(messages[localError] || 'שליחת ההזמנה נכשלה');
+        }
         return bookingId;
       },
       approveBooking: async (bookingId) => {
@@ -321,6 +343,7 @@ export function ShareChargeProvider({ children }) {
             rating: 5,
             photos: 0,
             termsText: stationData.termsText || '',
+            serviceCategory: 'charging',
             createdAt: Date.now(),
           });
           addEvent(draft, `מנהל הוסיף עמדה חדשה${host ? ` עבור ${host.name}` : ''}`);
@@ -391,6 +414,313 @@ export function ShareChargeProvider({ children }) {
           draft.settings.commission = Number(commission);
           addEvent(draft, `עמלת המיזם עודכנה ל-${commission}%`);
         });
+      },
+      createTender: async ({
+        category,
+        lat,
+        lng,
+        addressText,
+        vehicleProfile,
+        problemDescription,
+        phone,
+        notifyRadiusKm,
+      }) => {
+        if (useApi) {
+          try {
+            const data = await sharechargeApi.createTender(SHARECHARGE_ROLE_KEYS.client, {
+              category,
+              lat,
+              lng,
+              addressText,
+              vehicleProfile,
+              problemDescription,
+              phone,
+              notifyRadiusKm,
+            });
+            await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+            return data.request;
+          } catch (err) {
+            throw new Error(formatShareChargeApiError(err, 'booking'));
+          }
+        }
+        let created = null;
+        update((draft) => {
+          if (!draft.serviceRequests) draft.serviceRequests = [];
+          if (!draft.serviceBids) draft.serviceBids = [];
+          const sessionEmail = loadAuthSessions().client?.email;
+          const driver = ensureDriverUserForEmail(draft, sessionEmail);
+          const id = createId('tender');
+          created = {
+            id,
+            driverId: driver.id,
+            category,
+            lat,
+            lng,
+            addressText: addressText || '',
+            vehicleProfile: vehicleProfile || {},
+            status: 'open',
+            amount: 0,
+            createdAt: Date.now(),
+          };
+          draft.serviceRequests.unshift(created);
+          const demoBids = [
+            { hostId: 'host-1', eta: 10, lines: [{ label: 'נסיעה', amount: 60 }, { label: 'שירות', amount: 60 }] },
+            { hostId: 'host-2', eta: 12, lines: [{ label: 'נסיעה', amount: 70 }, { label: 'תיקון', amount: 50 }] },
+          ];
+          for (const tpl of demoBids) {
+            draft.serviceBids.unshift({
+              id: createId('bid'),
+              requestId: id,
+              hostId: tpl.hostId,
+              lineItems: tpl.lines,
+              total: tpl.lines.reduce((s, l) => s + l.amount, 0),
+              etaMinutes: tpl.eta,
+              status: 'pending',
+              createdAt: Date.now(),
+            });
+          }
+          addEvent(draft, `קריאת חירום: ${category}`);
+        });
+        return created;
+      },
+      acceptTenderBid: async (requestId, bidId) => {
+        if (useApi) {
+          const data = await sharechargeApi.acceptTenderBid(SHARECHARGE_ROLE_KEYS.client, requestId, bidId);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data;
+        }
+        update((draft) => {
+          const request = draft.serviceRequests?.find((item) => item.id === requestId);
+          const bid = draft.serviceBids?.find((item) => item.id === bidId);
+          if (!request || !bid) return;
+          request.status = 'assigned';
+          request.acceptedBidId = bidId;
+          request.hostId = bid.hostId;
+          request.amount = bid.total;
+          bid.status = 'accepted';
+        });
+      },
+      counterTenderBid: async (requestId, bidId, payload) => {
+        if (useApi) {
+          const data = await sharechargeApi.counterTenderBid(
+            SHARECHARGE_ROLE_KEYS.client,
+            requestId,
+            bidId,
+            payload,
+          );
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data;
+        }
+        update((draft) => {
+          const bid = draft.serviceBids?.find((item) => item.id === bidId);
+          if (!bid) return;
+          bid.driverCounterTotal = Number(payload.total);
+          bid.driverCounterEtaMinutes = Number(payload.etaMinutes || 15);
+          bid.driverCounterMessage = payload.message || '';
+          bid.driverCounterAt = Date.now();
+        });
+      },
+      reviseTenderBid: async (requestId, bidId, payload) => {
+        if (useApi) {
+          const data = await sharechargeApi.reviseTenderBid(
+            SHARECHARGE_ROLE_KEYS.provider,
+            requestId,
+            bidId,
+            payload,
+          );
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.provider);
+          return data;
+        }
+        update((draft) => {
+          const bid = draft.serviceBids?.find((item) => item.id === bidId);
+          if (!bid) return;
+          bid.total = Number(payload.total);
+          bid.etaMinutes = Number(payload.etaMinutes || 15);
+          bid.driverCounterTotal = null;
+          bid.driverCounterEtaMinutes = null;
+          bid.driverCounterMessage = null;
+        });
+      },
+      submitTenderBid: async (requestId, payload) => {
+        if (useApi) {
+          const data = await sharechargeApi.submitTenderBid(SHARECHARGE_ROLE_KEYS.provider, requestId, payload);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.provider);
+          return data;
+        }
+        let bid = null;
+        update((draft) => {
+          if (!draft.serviceBids) draft.serviceBids = [];
+          const session = loadAuthSessions().provider;
+          bid = {
+            id: createId('bid'),
+            requestId,
+            hostId: draft.users.find((u) => u.email === session?.email)?.id || 'host-1',
+            lineItems: payload.lineItems || [],
+            total: Number(payload.total || 0),
+            etaMinutes: Number(payload.etaMinutes || 15),
+            status: 'pending',
+            createdAt: Date.now(),
+          };
+          draft.serviceBids.unshift(bid);
+        });
+        return { bid };
+      },
+      completeTender: async (requestId) => {
+        if (useApi) {
+          const data = await sharechargeApi.completeTender(SHARECHARGE_ROLE_KEYS.provider, requestId);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.provider);
+          return data;
+        }
+        update((draft) => {
+          const request = draft.serviceRequests?.find((item) => item.id === requestId);
+          if (!request) return;
+          request.status = 'completed';
+          request.completedAt = Date.now();
+        });
+      },
+      fetchPaymentSummary: async (portal = apiPortal) => {
+        if (useApi) {
+          const data = await sharechargeApi.fetchPaymentSummary(portal);
+          return data.summary;
+        }
+        const paid = (state.payments || []).filter((p) => p.status === 'paid');
+        if (portal === SHARECHARGE_ROLE_KEYS.system) {
+          return {
+            count: paid.length,
+            volume: paid.reduce((s, p) => s + p.amount, 0),
+            platformFees: paid.reduce((s, p) => s + p.platformFee, 0),
+            hostPayouts: paid.reduce((s, p) => s + p.hostShare, 0),
+            pendingPayouts: 0,
+          };
+        }
+        if (portal === SHARECHARGE_ROLE_KEYS.provider) {
+          const hostPaid = paid.filter((p) => p.hostId);
+          return {
+            count: hostPaid.length,
+            earned: hostPaid.reduce((s, p) => s + p.hostShare, 0),
+            settled: hostPaid.reduce((s, p) => s + p.hostShare, 0),
+            pendingPayouts: 0,
+          };
+        }
+        return { count: paid.length, spent: paid.reduce((s, p) => s + p.amount, 0) };
+      },
+      createPaymentCheckout: async (payload) => {
+        if (useApi) {
+          const data = await sharechargeApi.createPaymentCheckout(SHARECHARGE_ROLE_KEYS.client, payload);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data.payment;
+        }
+        let created = null;
+        update((draft) => {
+          if (!draft.payments) draft.payments = [];
+          const sessionEmail = loadAuthSessions().client?.email;
+          const driver = ensureDriverUserForEmail(draft, sessionEmail);
+          const id = createId('pay');
+          const splits = buildDefaultSplits(payload).map((split, index) => ({
+            id: createId(`split-${index}`),
+            paymentId: id,
+            ...split,
+            status: 'pending',
+            createdAt: Date.now(),
+          }));
+          created = {
+            id,
+            referenceType: payload.referenceType,
+            referenceId: payload.referenceId,
+            payerId: driver.id,
+            hostId: payload.hostId,
+            title: payload.title,
+            amount: payload.amount,
+            platformFee: payload.platformFee,
+            hostShare: payload.hostShare,
+            currency: 'ILS',
+            status: 'pending',
+            gateway: 'tranzila',
+            createdAt: Date.now(),
+            splits,
+          };
+          draft.payments.unshift(created);
+        });
+        return created;
+      },
+      updatePaymentSplits: async (paymentId, cardSplits) => {
+        if (useApi) {
+          const data = await sharechargeApi.updatePaymentSplits(SHARECHARGE_ROLE_KEYS.client, paymentId, cardSplits);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data.payment;
+        }
+        let updated = null;
+        update((draft) => {
+          const payment = draft.payments?.find((item) => item.id === paymentId);
+          if (!payment) return;
+          payment.splits = [
+            ...cardSplits.map((item, index) => ({
+              id: createId(`split-${index}`),
+              paymentId,
+              splitType: 'card_charge',
+              cardLast4: item.cardLast4,
+              cardBrand: item.cardBrand,
+              amount: Number(item.amount),
+              status: 'pending',
+              createdAt: Date.now(),
+            })),
+            ...(payment.splits || []).filter((s) => s.splitType !== 'card_charge'),
+          ];
+          updated = payment;
+        });
+        return updated;
+      },
+      chargePayment: async (paymentId, cardPayload) => {
+        if (useApi) {
+          const data = await sharechargeApi.chargePayment(SHARECHARGE_ROLE_KEYS.client, paymentId, cardPayload);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data;
+        }
+        let result = null;
+        update((draft) => {
+          const payment = draft.payments?.find((item) => item.id === paymentId);
+          if (!payment) return;
+          payment.status = 'paid';
+          payment.gatewayTxnId = `tz-mock-${createId('tx')}`;
+          payment.paidAt = Date.now();
+          payment.splits.forEach((split) => {
+            split.status = split.splitType === 'card_charge' ? 'paid' : 'settled';
+            if (split.splitType === 'card_charge') split.gatewayTxnId = payment.gatewayTxnId;
+          });
+          result = { ok: true, payment };
+          addEvent(draft, `תשלום ${currency(payment.amount)} בוצע · Tranzila`);
+        });
+        return result;
+      },
+      createTranzilaSession: async (paymentId, splitIndex = 0) => {
+        if (useApi) {
+          const data = await sharechargeApi.createTranzilaSession(SHARECHARGE_ROLE_KEYS.client, paymentId, splitIndex);
+          return data.session;
+        }
+        let session = null;
+        update((draft) => {
+          const payment = draft.payments?.find((item) => item.id === paymentId);
+          const chargeSplits = payment?.splits?.filter((s) => s.splitType === 'card_charge') || [];
+          const split = chargeSplits[splitIndex];
+          session = {
+            iframeUrl: '',
+            fields: {},
+            mock: true,
+            paymentId,
+            splitIndex,
+            splitAmount: split?.amount || payment?.amount || 0,
+            totalSplits: chargeSplits.length || 1,
+            supplier: 'mock',
+          };
+        });
+        return session;
+      },
+      fetchTranzilaConfig: async () => {
+        if (useApi) {
+          const data = await sharechargeApi.fetchTranzilaConfig(SHARECHARGE_ROLE_KEYS.client);
+          return data.config;
+        }
+        return { mock: true, ready: false, terminal: '', iframeBase: 'https://directng.tranzila.com' };
       },
     }),
     [state, loading, syncError, refreshFromApi, repositoryMode, useApi, apiPortal],

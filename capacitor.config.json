@@ -1,9 +1,17 @@
 {
-  "appId": "com.sharecharge.ops",
-  "appName": "ShareCharge ניהול",
+  "appId": "com.sharecharge.client",
+  "appName": "ShareCharge לקוח",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "allowNavigation": [
+      "*.tranzila.com",
+      "directng.tranzila.com",
+      "direct.tranzila.com",
+      "secure5.tranzila.com",
+      "api.tranzila.com",
+      "sharecharge.onrender.com"
+    ]
   },
   "plugins": {
     "Geolocation": {

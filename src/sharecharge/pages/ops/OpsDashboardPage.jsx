@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   CreditCard,
@@ -99,7 +100,14 @@ export function OpsDashboardPage() {
 
   return (
     <>
-      <div className="mb-2 flex justify-end">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <Link
+          to="/ops/payments"
+          className="flex items-center gap-2 rounded-sc-sm border border-[var(--sc-accent)]/20 bg-white px-3 py-2 text-xs font-black text-[var(--sc-accent)]"
+        >
+          <CreditCard size={16} />
+          ריכוז תשלומים
+        </Link>
         <button
           type="button"
           onClick={reset}

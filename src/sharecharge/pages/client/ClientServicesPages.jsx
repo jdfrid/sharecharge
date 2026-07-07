@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, MapPin, Search, Wrench } from 'lucide-react';
+import { ChevronLeft, MapPin, Wrench } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
-import { SERVICE_CATEGORIES, driverLocationProfiles } from '../../constants';
+import { SERVICE_CATEGORIES } from '../../constants';
 import { useClientLocation } from '../../hooks/useClientLocation';
-import { distanceToStation } from '../../utils/geo';
+import { useLocationAddress } from '../../hooks/useLocationAddress';
+import { useAddressSearch } from '../../hooks/useAddressSearch';
+import { fallbackAreaName } from '../../utils/reverseGeocode';
+import { buildStationList } from '../../utils/stationSearch';
 import { formatShareChargeApiError } from '../../data/sharechargeApi';
+import { AddressSearchField } from '../../components/AddressSearchField';
 import { Card } from '../../components/ui/Card';
 
 export function ClientServiceBrowsePage() {
@@ -14,35 +18,30 @@ export function ClientServiceBrowsePage() {
   const { state } = useShareCharge();
   const navigate = useNavigate();
   const gps = useClientLocation(true);
-  const [query, setQuery] = useState('');
-  const [locationId, setLocationId] = useState('current');
+  const { address: myAddress, loading: addressLoading } = useLocationAddress(
+    gps.lat,
+    gps.lng,
+    !gps.loading && gps.lat != null,
+  );
   const [maxDistance, setMaxDistance] = useState(50);
 
   if (!meta) return <Navigate to="/client/discover" replace />;
 
-  const origin = useMemo(() => {
-    if (locationId === 'current' && gps.lat != null) return { lat: gps.lat, lng: gps.lng };
-    const profile = driverLocationProfiles.find((p) => p.id === locationId);
-    if (profile?.lat != null) return { lat: profile.lat, lng: profile.lng };
-    return null;
-  }, [locationId, gps.lat, gps.lng]);
+  const gpsLabel = gps.loading
+    ? 'מאתר מיקום…'
+    : myAddress || (gps.lat != null ? fallbackAreaName(gps.lat, gps.lng) : 'מיקום לא זמין');
+  const gpsOrigin = gps.lat != null ? { lat: gps.lat, lng: gps.lng } : null;
+  const addressSearch = useAddressSearch({ gpsOrigin, gpsLabel });
 
-  const getDistance = (item) => {
-    if (origin) return distanceToStation(item, origin);
-    return Number(item.distance) || 999;
-  };
-
-  const items = useMemo(
+  const { items, expanded } = useMemo(
     () =>
-      state.stations
-        .filter((s) => (s.serviceCategory || 'charging') === category && s.available)
-        .filter((s) => {
-          const term = query.trim();
-          return !term || `${s.name} ${s.address} ${s.plug}`.includes(term);
-        })
-        .filter((s) => getDistance(s) <= maxDistance)
-        .sort((a, b) => getDistance(a) - getDistance(b)),
-    [state.stations, category, query, maxDistance, origin],
+      buildStationList({
+        stations: state.stations.filter((s) => (s.serviceCategory || 'charging') === category),
+        origin: addressSearch.origin,
+        maxDistance,
+        textQuery: '',
+      }),
+    [state.stations, category, addressSearch.origin, maxDistance],
   );
 
   return (
@@ -68,38 +67,38 @@ export function ClientServiceBrowsePage() {
 
       <Card>
         <h2 className="text-xl font-black">{meta.discoverTitle}</h2>
-        <p className="mt-1 text-sm font-bold text-sc-muted">חיפוש לפי הסביבה שלך · הזמנת שירות כמו בטעינה</p>
-        <div className="mt-4 flex items-center gap-2 rounded-sc-md border border-sc-border bg-white px-3 py-3">
-          <Search size={18} className="text-sc-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="חיפוש לפי שם או כתובת..."
-            className="w-full border-0 bg-transparent text-sm font-bold outline-none"
+        <p className="mt-1 text-sm font-bold text-sc-muted">חיפוש כתובת · הזמנת שירות כמו בטעינה</p>
+        <div className="mt-4">
+          <AddressSearchField
+            query={addressSearch.query}
+            onQueryChange={addressSearch.setQuery}
+            onSearch={addressSearch.runSearch}
+            onPickSuggestion={addressSearch.pickSuggestion}
+            onResetGps={addressSearch.resetToGps}
+            suggestions={addressSearch.suggestions}
+            searching={addressSearch.searching}
+            searchError={addressSearch.searchError}
+            usingGps={addressSearch.usingGps}
+            originLabel={addressSearch.originLabel}
           />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="text-[11px] font-bold text-sc-muted">
-            נקודת ייחוס
-            <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="mt-1 w-full rounded-sc-md border border-sc-border px-2 py-2 text-sm font-black">
-              {driverLocationProfiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[11px] font-bold text-sc-muted">
-            מרחק מקסימלי
-            <select value={maxDistance} onChange={(e) => setMaxDistance(Number(e.target.value))} className="mt-1 w-full rounded-sc-md border border-sc-border px-2 py-2 text-sm font-black">
-              <option value={5}>5 ק״מ</option>
-              <option value={15}>15 ק״מ</option>
-              <option value={50}>50 ק״מ</option>
-            </select>
-          </label>
-        </div>
-        {locationId === 'current' && gps.error ? (
-          <p className="mt-2 text-xs font-bold text-amber-700">{gps.error} — אפשרו GPS או בחרו נקודת ייחוס.</p>
-        ) : null}
+        <label className="mt-3 block text-[11px] font-bold text-sc-muted">
+          מרחק מקסימלי
+          <select value={maxDistance} onChange={(e) => setMaxDistance(Number(e.target.value))} className="mt-1 w-full rounded-sc-md border border-sc-border px-2 py-2 text-sm font-black">
+            <option value={5}>5 ק״מ</option>
+            <option value={15}>15 ק״מ</option>
+            <option value={50}>50 ק״מ</option>
+          </select>
+        </label>
       </Card>
+
+      {expanded ? (
+        <Card>
+          <p className="text-center text-sm font-bold text-amber-800">
+            אין עסקים בטווח {maxDistance} ק״מ — מציגים את כל העסקים
+          </p>
+        </Card>
+      ) : null}
 
       {items.length === 0 ? (
         <Card>
@@ -119,7 +118,7 @@ export function ClientServiceBrowsePage() {
                     <MapPin size={14} /> {item.address}
                   </p>
                   <p className="mt-2 text-xs font-bold text-sc-muted">
-                    {getDistance(item).toFixed(1)} km · ₪{item.pricePerKwh} · {item.plug}
+                    {item.computedDistance.toFixed(1)} km · ₪{item.pricePerKwh} · {item.plug}
                   </p>
                   <p className="mt-1 text-[11px] text-sc-muted" dir="ltr">
                     📍 {item.lat?.toFixed(5)}, {item.lng?.toFixed(5)}

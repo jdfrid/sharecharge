@@ -19,6 +19,9 @@ export const statusLabels = {
   completed: 'הושלם ושולם',
   rejected: 'נדחה',
   cancelled: 'בוטל',
+  open: 'ממתין להצעות',
+  assigned: 'ספק נבחר',
+  in_progress: 'בדרך אליך',
 };
 
 export const statusStyles = {
@@ -30,6 +33,9 @@ export const statusStyles = {
   completed: 'bg-slate-900 text-white ring-1 ring-slate-800',
   rejected: 'bg-red-100 text-red-800 ring-1 ring-red-200',
   cancelled: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+  open: 'bg-amber-100 text-amber-800 ring-1 ring-amber-200',
+  assigned: 'bg-blue-100 text-blue-800 ring-1 ring-blue-200',
+  in_progress: 'bg-cyan-100 text-cyan-800 ring-1 ring-cyan-200',
 };
 
 export const roleEntryConfig = {
@@ -72,7 +78,7 @@ export const SERVICE_CATEGORIES = {
   charging: {
     id: 'charging',
     label: 'טעינה',
-    path: '/client/discover',
+    path: '/client/charging/map',
     discoverTitle: 'עמדות טעינה',
     unitLabel: 'kWh',
   },
@@ -104,3 +110,35 @@ export const SERVICE_NAV_LINKS = [
   SERVICE_CATEGORIES.tow,
   SERVICE_CATEGORIES.garage,
 ];
+
+export const EMERGENCY_CATEGORIES = {
+  flat_tire: {
+    id: 'flat_tire',
+    label: "פנצ'ר",
+    icon: 'flat-tire.png',
+    path: '/client/emergency?category=flat_tire',
+  },
+  fuel: { id: 'fuel', label: 'דלק', icon: 'fuel.png', path: '/client/emergency?category=fuel' },
+  tow: { id: 'tow', label: 'גרר', icon: 'tow.png', path: '/client/emergency?category=tow' },
+  battery: {
+    id: 'battery',
+    label: 'מוסך · מצבר',
+    icon: 'garage.png',
+    path: '/client/emergency?category=battery',
+  },
+};
+
+export const EMERGENCY_NAV_TILES = [
+  EMERGENCY_CATEGORIES.flat_tire,
+  EMERGENCY_CATEGORIES.fuel,
+  EMERGENCY_CATEGORIES.tow,
+  EMERGENCY_CATEGORIES.battery,
+];
+
+export const tenderStatusLabels = {
+  open: 'ממתין להצעות',
+  assigned: 'ספק נבחר',
+  in_progress: 'בדרך אליך',
+  completed: 'הושלם',
+  cancelled: 'בוטל',
+};

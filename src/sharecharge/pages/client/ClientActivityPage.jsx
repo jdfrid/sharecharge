@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   Calendar,
   Clock,
   CreditCard,
+  ChevronLeft,
 } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { getPreferredRepositoryMode } from '../../data/apiRepository.stub';
@@ -21,6 +23,9 @@ export function ClientActivityPage() {
   const driverBookings = state.bookings.filter((item) => item.driverId === myDriverId);
   const activeBooking = driverBookings.find((item) => !['completed', 'rejected', 'cancelled'].includes(item.status));
   const completedBookings = driverBookings.filter((item) => item.status === 'completed');
+  const activeTender = (state.serviceRequests || []).find(
+    (item) => item.driverId === myDriverId && !['completed', 'cancelled'].includes(item.status),
+  );
   const stationFor = (booking) => state.stations.find((station) => station.id === booking.stationId);
   const activeStation = activeBooking ? stationFor(activeBooking) : null;
   const apiMode = getPreferredRepositoryMode() === 'api';
@@ -48,10 +53,8 @@ export function ClientActivityPage() {
               <p className="text-sm font-black text-[var(--sc-accent-2)]">הזמנה פעילה</p>
               <h3 className="mt-1 text-xl font-black">{stationFor(activeBooking)?.name}</h3>
               <p className="mt-1 text-sm text-sc-muted">{stationFor(activeBooking)?.address}</p>
-              {activeStation?.lat ? (
-                <p className="mt-1 text-[10px] font-bold text-sc-muted" dir="ltr">
-                  📍 {Number(activeStation.lat).toFixed(5)}, {Number(activeStation.lng).toFixed(5)}
-                </p>
+              {activeStation?.address ? (
+                <p className="mt-1 text-sm text-sc-muted">{activeStation.address}</p>
               ) : null}
             </div>
             <StatusPill status={activeBooking.status} />
@@ -148,9 +151,30 @@ export function ClientActivityPage() {
         </Card>
       )}
 
-      {!activeBooking && (
+      {!activeBooking && !activeTender && (
         <Card>
-          <p className="text-center text-sm font-bold text-sc-muted">אין הזמנה פעילה. חזרו לחיפוש והזמינו עמדה.</p>
+          <p className="text-center text-sm font-bold text-sc-muted">אין הזמנה פעילה.</p>
+          <Link
+            to="/client/home"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-sc-md bg-[var(--sc-accent)] py-3 text-sm font-black text-white"
+          >
+            חזרה לבית
+            <ChevronLeft size={18} />
+          </Link>
+        </Card>
+      )}
+
+      {activeTender && (
+        <Card className="border-amber-200/60 bg-amber-50/40">
+          <p className="text-sm font-black text-amber-900">קריאת חירום פעילה</p>
+          <p className="mt-1 text-xs font-bold text-sc-muted">{activeTender.addressText}</p>
+          <Link
+            to={activeTender.status === 'open' ? `/client/tender/${activeTender.id}/offers` : `/client/track/${activeTender.id}`}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-sc-md bg-amber-600 py-3 text-sm font-black text-white"
+          >
+            המשך מעקב
+            <ChevronLeft size={18} />
+          </Link>
         </Card>
       )}
 
@@ -161,7 +185,15 @@ export function ClientActivityPage() {
             {completedBookings.map((booking) => (
               <div key={booking.id} className="flex items-center justify-between rounded-sc-sm border border-sc-border bg-sc-surface p-3 text-sm">
                 <span>{stationFor(booking)?.name}</span>
-                <strong>{currency(booking.amount)}</strong>
+                <div className="flex items-center gap-2">
+                  <strong>{currency(booking.amount)}</strong>
+                  <Link to={`/client/payment/booking/${booking.id}`} className="text-xs font-black text-[var(--sc-success)]">
+                    תשלום
+                  </Link>
+                  <Link to={`/client/receipt/${booking.id}`} className="text-xs font-black text-[var(--sc-accent)]">
+                    קבלה
+                  </Link>
+                </div>
               </div>
             ))}
           </div>

@@ -7,6 +7,11 @@ import {
 import {
   rowToBooking,
   rowToDispute,
+  rowToPayment,
+  rowToPaymentMethod,
+  rowToPaymentSplit,
+  rowToServiceBid,
+  rowToServiceRequest,
   rowToStation,
   rowToTransaction,
   rowToUser,
@@ -17,7 +22,8 @@ export async function loadFullState(dbReady = true) {
     return loadFullStateMem();
   }
 
-  const [settingsRes, usersRes, stationsRes, bookingsRes, txRes, disputesRes, eventsRes] = await Promise.all([
+  const [settingsRes, usersRes, stationsRes, bookingsRes, txRes, disputesRes, eventsRes, requestsRes, bidsRes, paymentsRes, methodsRes] =
+    await Promise.all([
     query('SELECT * FROM settings WHERE id = 1'),
     query('SELECT * FROM users ORDER BY created_at DESC'),
     query('SELECT * FROM stations ORDER BY created_at DESC NULLS LAST'),
@@ -25,9 +31,26 @@ export async function loadFullState(dbReady = true) {
     query('SELECT * FROM transactions ORDER BY created_at DESC'),
     query('SELECT * FROM disputes ORDER BY created_at DESC'),
     query('SELECT * FROM audit_events ORDER BY time DESC LIMIT 20'),
+    query('SELECT * FROM service_requests ORDER BY created_at DESC').catch(() => ({ rows: [] })),
+    query('SELECT * FROM service_bids ORDER BY created_at DESC').catch(() => ({ rows: [] })),
+    query('SELECT * FROM payments ORDER BY created_at DESC').catch(() => ({ rows: [] })),
+    query('SELECT * FROM payment_methods ORDER BY created_at DESC').catch(() => ({ rows: [] })),
   ]);
 
   const s = settingsRes.rows[0];
+  const paymentRows = paymentsRes.rows.map(rowToPayment);
+  if (paymentsRes.rows.length) {
+    const splitRes = await query('SELECT * FROM payment_splits ORDER BY created_at').catch(() => ({ rows: [] }));
+    const byPayment = new Map();
+    for (const row of splitRes.rows) {
+      const split = rowToPaymentSplit(row);
+      if (!byPayment.has(split.paymentId)) byPayment.set(split.paymentId, []);
+      byPayment.get(split.paymentId).push(split);
+    }
+    for (const payment of paymentRows) {
+      payment.splits = byPayment.get(payment.id) || [];
+    }
+  }
   return {
     settings: {
       commission: Number(s?.commission ?? 12.5),
@@ -39,6 +62,10 @@ export async function loadFullState(dbReady = true) {
     bookings: bookingsRes.rows.map(rowToBooking),
     transactions: txRes.rows.map(rowToTransaction),
     disputes: disputesRes.rows.map(rowToDispute),
+    serviceRequests: requestsRes.rows.map(rowToServiceRequest),
+    serviceBids: bidsRes.rows.map(rowToServiceBid),
+    payments: paymentRows,
+    paymentMethods: methodsRes.rows.map(rowToPaymentMethod),
     events: eventsRes.rows.map((r) => ({
       id: r.id,
       text: r.text,

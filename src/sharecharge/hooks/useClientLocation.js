@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const defaultState = {
   lat: null,
@@ -8,8 +8,19 @@ const defaultState = {
   loading: true,
 };
 
-export function useClientLocation(enabled = true) {
+export function useClientLocation(enabled = true, { watch = false } = {}) {
   const [location, setLocation] = useState(defaultState);
+  const watchIdRef = useRef(null);
+
+  const applyPosition = useCallback((pos) => {
+    setLocation({
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy: pos.coords.accuracy,
+      error: null,
+      loading: false,
+    });
+  }, []);
 
   const refresh = useCallback(() => {
     if (!enabled || typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -23,15 +34,7 @@ export function useClientLocation(enabled = true) {
 
     setLocation((prev) => ({ ...prev, loading: true, error: null }));
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          error: null,
-          loading: false,
-        });
-      },
+      applyPosition,
       (err) => {
         setLocation((prev) => ({
           ...prev,
@@ -39,13 +42,36 @@ export function useClientLocation(enabled = true) {
           error: err.message || 'לא ניתן לקבל מיקום',
         }));
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: watch ? 5000 : 0 },
     );
-  }, [enabled]);
+  }, [enabled, watch, applyPosition]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!enabled || !watch || typeof navigator === 'undefined' || !navigator.geolocation) {
+      refresh();
+      return undefined;
+    }
+
+    setLocation((prev) => ({ ...prev, loading: true, error: null }));
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      applyPosition,
+      (err) => {
+        setLocation((prev) => ({
+          ...prev,
+          loading: false,
+          error: err.message || 'לא ניתן לקבל מיקום',
+        }));
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 },
+    );
+
+    return () => {
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [enabled, watch, refresh, applyPosition]);
 
   return { ...location, refresh };
 }

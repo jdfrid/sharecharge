@@ -21,14 +21,14 @@ export function isSingleAppBuild() {
 }
 
 const ENTRY_PATHS = {
-  client: '/client/entry',
+  client: '/client/home',
   provider: '/provider/entry',
   ops: '/ops/entry',
   all: '/sharecharge',
 };
 
 const AUTH_PATHS = {
-  client: '/client/discover',
+  client: '/client/home',
   provider: '/provider/dashboard',
   ops: '/ops/dashboard',
   all: '/sharecharge',

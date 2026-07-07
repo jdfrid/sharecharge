@@ -10,7 +10,13 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** @returns {number|null} distance in km */
 export function distanceToStation(station, origin) {
-  if (!origin?.lat || !station?.lat) return Number(station?.distance) || 999;
-  return haversineKm(origin.lat, origin.lng, station.lat, station.lng) ?? (Number(station?.distance) || 999);
+  if (!origin?.lat || !origin?.lng) {
+    return Number(station?.distance) || null;
+  }
+  const lat = Number(station?.lat);
+  const lng = Number(station?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return haversineKm(origin.lat, origin.lng, lat, lng);
 }

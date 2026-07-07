@@ -1,4 +1,14 @@
-const API_ORIGIN = (import.meta.env.VITE_SHARECHARGE_API_URL || '').replace(/\/$/, '');
+const nativeModes = new Set(['client', 'provider', 'ops']);
+const DEFAULT_RENDER_API = 'https://sharecharge.onrender.com';
+
+function resolveApiOrigin() {
+  const fromEnv = (import.meta.env.VITE_SHARECHARGE_API_URL || '').replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (nativeModes.has(import.meta.env.MODE)) return DEFAULT_RENDER_API;
+  return '';
+}
+
+const API_ORIGIN = resolveApiOrigin();
 const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api/sharecharge` : '/api/sharecharge';
 
 const TOKEN_KEY = 'sharecharge-jwt';
@@ -221,6 +231,11 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
+    if (res.status === 404 && path.includes('/tenders')) {
+      const err = new Error('שירות חירום לא deployed בשרver — Render Dashboard → Manual Deploy (Dockerfile).');
+      err.status = 404;
+      throw err;
+    }
     const err = new Error('השרver החזיר תשובה לא תקינה (לא JSON).');
     err.blocked = true;
     throw err;
@@ -228,7 +243,15 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
 
   if (!res.ok) {
     const detail = data?.detail || data?.error;
-    const err = new Error(detail || res.statusText || 'Request failed');
+    let message = detail || res.statusText || 'Request failed';
+    if (res.status === 404 && path.includes('/tenders')) {
+      message = 'שירות חירום לא deployed בשרver — Render Dashboard → Manual Deploy (Dockerfile).';
+    } else if (res.status === 404 && path.includes('/geo/')) {
+      message = 'שירות כתובות לא deployed — Render Dashboard → Manual Deploy (Dockerfile).';
+    } else if (res.status === 401 || res.status === 403) {
+      message = detail || 'נדרש OTP — התחברו מחדש';
+    }
+    const err = new Error(message);
     err.status = res.status;
     err.data = data;
     throw err;
@@ -238,6 +261,10 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
 
 export async function sendOtp(email, portal) {
   return apiRequest('/auth/otp/send', { method: 'POST', body: { email, portal } });
+}
+
+export async function registerAccount(payload) {
+  return apiRequest('/auth/register', { method: 'POST', body: payload });
 }
 
 export async function verifyOtp(email, portal, code) {
@@ -279,4 +306,31 @@ export const sharechargeApi = {
   reset: (portal) => apiRequest('/ops/reset', { method: 'POST', portal }),
   reportBookingLocation: (portal, id, coords) =>
     apiRequest(`/bookings/${id}/location`, { method: 'POST', body: coords, portal }),
+  createTender: (portal, payload) => apiRequest('/tenders', { method: 'POST', body: payload, portal }),
+  fetchTenderBids: (portal, id) => apiRequest(`/tenders/${id}/bids`, { portal }),
+  fetchOpenTenders: (portal) => apiRequest('/tenders/open', { portal }),
+  submitTenderBid: (portal, id, payload) =>
+    apiRequest(`/tenders/${id}/bids`, { method: 'POST', body: payload, portal }),
+  acceptTenderBid: (portal, requestId, bidId) =>
+    apiRequest(`/tenders/${requestId}/accept/${bidId}`, { method: 'POST', portal }),
+  counterTenderBid: (portal, requestId, bidId, payload) =>
+    apiRequest(`/tenders/${requestId}/bids/${bidId}/counter`, { method: 'POST', body: payload, portal }),
+  reviseTenderBid: (portal, requestId, bidId, payload) =>
+    apiRequest(`/tenders/${requestId}/bids/${bidId}/revise`, { method: 'POST', body: payload, portal }),
+  updateTenderLocation: (portal, id, payload) =>
+    apiRequest(`/tenders/${id}/location`, { method: 'POST', body: payload, portal }),
+  completeTender: (portal, id) => apiRequest(`/tenders/${id}/complete`, { method: 'POST', portal }),
+  fetchPayments: (portal) => apiRequest('/payments', { portal }),
+  fetchPaymentSummary: (portal) => apiRequest('/payments/summary', { portal }),
+  fetchPaymentMethods: (portal) => apiRequest('/payments/methods', { portal }),
+  addPaymentMethod: (portal, payload) => apiRequest('/payments/methods', { method: 'POST', body: payload, portal }),
+  createPaymentCheckout: (portal, payload) => apiRequest('/payments/checkout', { method: 'POST', body: payload, portal }),
+  chargePayment: (portal, id, payload) => apiRequest(`/payments/${id}/charge`, { method: 'POST', body: payload, portal }),
+  updatePaymentSplits: (portal, id, cardSplits) =>
+    apiRequest(`/payments/${id}/splits`, { method: 'PATCH', body: { cardSplits }, portal }),
+  fetchTranzilaConfig: (portal) => apiRequest('/payments/tranzila/config', { portal }),
+  fetchPaymentGateways: (portal, region) =>
+    apiRequest(`/payments/gateways/recommendations${region ? `?region=${region}` : ''}`, { portal }),
+  createTranzilaSession: (portal, paymentId, splitIndex = 0) =>
+    apiRequest(`/payments/${paymentId}/tranzila-session`, { method: 'POST', body: { splitIndex }, portal }),
 };

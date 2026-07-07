@@ -13,7 +13,7 @@ import { useShareCharge } from '../../context/ShareChargeContext';
 import { SERVICE_NAV_LINKS, driverLocationProfiles } from '../../constants';
 import { useClientLocation } from '../../hooks/useClientLocation';
 import { resolveDriverIdForSession } from '../../auth/identity';
-import { distanceToStation } from '../../utils/geo';
+import { isChargingStation } from '../../utils/serviceCategories';
 import { shortTime } from '../../utils';
 import { Card } from '../../components/ui/Card';
 
@@ -52,7 +52,7 @@ export function ClientDiscoverPage() {
   const filteredStations = useMemo(
     () =>
       state.stations
-        .filter((station) => (station.serviceCategory || 'charging') === 'charging')
+        .filter((station) => isChargingStation(station))
         .filter((station) => {
           const term = query.trim();
           const matchesSearch = !term || `${station.name} ${station.address} ${station.plug}`.includes(term);

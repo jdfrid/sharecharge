@@ -12,6 +12,8 @@ import {
 import { haversineKm, isWithinStationGeofence } from '../geo.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 import { addEvent, getSettings } from '../services/stateService.js';
+import { calculateBookingAmount, calculateKwhFromSession } from '../services/chargingBilling.js';
+import { isChargingStation } from '../services/serviceCategories.js';
 import { createId, createOtp, rowToBooking } from '../utils.js';
 
 const router = Router();
@@ -54,12 +56,20 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
           detail: 'הסשן פג — צאו והתחברו שוב עם OTP',
         });
       }
-      if (result.error === 'station_not_found' || result.error === 'station_unavailable') {
+      if (
+        result.error === 'station_not_found'
+        || result.error === 'station_unavailable'
+        || result.error === 'station_occupied'
+      ) {
+        const detail =
+          result.error === 'station_unavailable'
+            ? 'העמדה לא זמינה כרגע — הספק יכול לשחרר מלוח הבקרה'
+            : result.error === 'station_occupied'
+              ? 'העמדה תפוסה בהזמנה פעילה — נסו עמדה אחרת או המתינו לשחרור'
+              : `עמדה לא נמצאה (${stationId || 'חסר מזהה'}) — רעננו את הרשימה`;
         return res.status(404).json({
           error: 'Station not available',
-          detail: result.error === 'station_unavailable'
-            ? 'העמדה לא זמינה כרגע'
-            : `עמדה לא נמצאה (${stationId || 'חסר מזהה'}) — רעננו את הרשימה`,
+          detail,
         });
       }
       return res.status(201).json({ booking: result.booking });
@@ -67,7 +77,22 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
 
     const { rows: stationRows } = await query('SELECT * FROM stations WHERE id = $1', [stationId]);
     const station = stationRows[0];
-    if (!station || !station.available) return res.status(404).json({ error: 'Station not available' });
+    if (!station || !isChargingStation(station)) {
+      return res.status(404).json({
+        error: 'Station not available',
+        detail: 'ניתן להזמין רק עמדות טעינה — ספקי חירום דרך קריאת חירום',
+      });
+    }
+    const bookable = await assertStationBookable(query, station, true);
+    if (bookable.error === 'station_not_found' || bookable.error === 'station_unavailable' || bookable.error === 'station_occupied') {
+      const detail =
+        bookable.error === 'station_unavailable'
+          ? 'העמדה לא זמינה כרגע — הספק יכול לשחרר מלוח הבקרה'
+          : bookable.error === 'station_occupied'
+            ? 'העמדה תפוסה בהזמנה פעילה — נסו עמדה אחרת או המתינו לשחרור'
+            : `עמדה לא נמצאה (${stationId || 'חסר מזהה'}) — רעננו את הרשימה`;
+      return res.status(404).json({ error: 'Station not available', detail });
+    }
 
     const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.sub]);
     let driver = userRows[0];
@@ -240,9 +265,9 @@ router.post('/:id/start-charge', authRequired, requireRole('driver'), async (req
 
 router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) => {
   try {
-    const { kwh } = req.body || {};
+    const { kwh: kwhOverride } = req.body || {};
     if (!dbReady(req)) {
-      const booking = finishBookingMem(req.params.id, req.user.sub, kwh);
+      const booking = finishBookingMem(req.params.id, req.user.sub, kwhOverride);
       if (!booking) return res.status(400).json({ error: 'Finish failed' });
       return res.json({ booking });
     }
@@ -256,26 +281,42 @@ router.post('/:id/finish', authRequired, requireRole('host'), async (req, res) =
     const { rows: stRows } = await query('SELECT * FROM stations WHERE id = $1', [booking.station_id]);
     const station = stRows[0];
     const settings = await getSettings(true);
-    const amount = Number((Number(kwh) * Number(station.price_per_kwh)).toFixed(2));
-    const platformFee = Number((amount * settings.commission / 100).toFixed(2));
-    const hostShare = Number((amount - platformFee).toFixed(2));
     const now = Date.now();
+
+    const calculatedKwh = calculateKwhFromSession({
+      startedAt: booking.started_at,
+      completedAt: now,
+      stationPowerKw: station.power,
+    });
+    const kwh =
+      kwhOverride != null && Number(kwhOverride) > 0
+        ? Number(Number(kwhOverride).toFixed(2))
+        : calculatedKwh || Number(booking.kwh || 0) || 0.5;
+
+    const billing = calculateBookingAmount({
+      kwh,
+      pricePerKwh: station.price_per_kwh,
+      commissionPct: settings.commission,
+    });
 
     await query(
       `UPDATE bookings SET status = 'completed', completed_at = $1, kwh = $2, amount = $3, host_share = $4, platform_fee = $5 WHERE id = $6`,
-      [now, kwh, amount, hostShare, platformFee, booking.id],
+      [now, billing.kwh, billing.amount, billing.hostShare, billing.platformFee, booking.id],
     );
 
     const txId = createId('tx');
     await query(
       `INSERT INTO transactions (id, booking_id, station_id, driver_id, host_id, amount, host_share, platform_fee, kwh, status, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'paid_mock',$10)`,
-      [txId, booking.id, station.id, booking.driver_id, booking.host_id, amount, hostShare, platformFee, kwh, now],
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10)`,
+      [txId, booking.id, station.id, booking.driver_id, booking.host_id, billing.amount, billing.hostShare, billing.platformFee, billing.kwh, now],
     );
 
-    await addEvent(`טעינה הסתיימה · חויב סך ₪${amount}`, 'activity', true);
+    await addEvent(`טעינה הסתיימה · ${billing.kwh} ק״wh · ₪${billing.amount}`, 'activity', true);
     const updated = (await query('SELECT * FROM bookings WHERE id = $1', [booking.id])).rows[0];
-    res.json({ booking: rowToBooking(updated) });
+    res.json({
+      booking: rowToBooking(updated),
+      billing: { ...billing, calculatedKwh, billedBy: kwhOverride != null ? 'manual' : 'session_time' },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Finish failed' });

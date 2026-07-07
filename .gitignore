@@ -4,5 +4,6 @@ android/app/build/
 android/.gradle/
 .env.*.local
 release/apk/*.apk
+release/install/*.apk
 server/node_modules
 dist/

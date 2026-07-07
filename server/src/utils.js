@@ -18,6 +18,7 @@ export function rowToUser(row) {
     id: row.id,
     name: row.name,
     email: row.email,
+    phone: row.phone || null,
     role: row.role,
     verified: row.verified,
     blocked: row.blocked,
@@ -82,6 +83,55 @@ export function rowToBooking(row) {
   };
 }
 
+export function rowToPayment(row) {
+  return {
+    id: row.id,
+    referenceType: row.reference_type,
+    referenceId: row.reference_id,
+    payerId: row.payer_id,
+    hostId: row.host_id,
+    title: row.title,
+    amount: Number(row.amount),
+    platformFee: Number(row.platform_fee),
+    hostShare: Number(row.host_share),
+    currency: row.currency || 'ILS',
+    status: row.status,
+    gateway: row.gateway,
+    gatewayTxnId: row.gateway_txn_id || null,
+    createdAt: Number(row.created_at),
+    paidAt: row.paid_at ? Number(row.paid_at) : undefined,
+    splits: row.splits || [],
+  };
+}
+
+export function rowToPaymentSplit(row) {
+  return {
+    id: row.id,
+    paymentId: row.payment_id,
+    splitType: row.split_type,
+    recipientId: row.recipient_id,
+    cardLast4: row.card_last4,
+    cardBrand: row.card_brand,
+    amount: Number(row.amount),
+    status: row.status,
+    gatewayTxnId: row.gateway_txn_id || null,
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function rowToPaymentMethod(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    provider: row.provider,
+    token: row.token,
+    cardLast4: row.card_last4,
+    cardBrand: row.card_brand,
+    isDefault: row.is_default,
+    createdAt: Number(row.created_at),
+  };
+}
+
 export function rowToTransaction(row) {
   return {
     id: row.id,
@@ -106,5 +156,46 @@ export function rowToDispute(row) {
     status: row.status,
     createdAt: Number(row.created_at),
     resolvedAt: row.resolved_at ? Number(row.resolved_at) : undefined,
+  };
+}
+
+export function rowToServiceRequest(row) {
+  return {
+    id: row.id,
+    driverId: row.driver_id,
+    category: row.category,
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+    addressText: row.address_text || '',
+    problemDescription: row.problem_description || '',
+    phone: row.phone || '',
+    notifyRadiusKm: row.notify_radius_km != null ? Number(row.notify_radius_km) : 50,
+    vehicleProfile: row.vehicle_profile || {},
+    status: row.status,
+    acceptedBidId: row.accepted_bid_id || null,
+    hostId: row.host_id || null,
+    amount: Number(row.amount || 0),
+    providerLat: row.provider_lat != null ? Number(row.provider_lat) : undefined,
+    providerLng: row.provider_lng != null ? Number(row.provider_lng) : undefined,
+    expiresAt: row.expires_at ? Number(row.expires_at) : undefined,
+    createdAt: Number(row.created_at),
+    completedAt: row.completed_at ? Number(row.completed_at) : undefined,
+  };
+}
+
+export function rowToServiceBid(row) {
+  return {
+    id: row.id,
+    requestId: row.request_id,
+    hostId: row.host_id,
+    lineItems: row.line_items || [],
+    total: Number(row.total),
+    etaMinutes: Number(row.eta_minutes),
+    status: row.status,
+    driverCounterTotal: row.driver_counter_total != null ? Number(row.driver_counter_total) : null,
+    driverCounterEtaMinutes: row.driver_counter_eta_minutes != null ? Number(row.driver_counter_eta_minutes) : null,
+    driverCounterMessage: row.driver_counter_message || '',
+    driverCounterAt: row.driver_counter_at ? Number(row.driver_counter_at) : null,
+    createdAt: Number(row.created_at),
   };
 }

@@ -7,7 +7,9 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import stationRoutes from './routes/stations.js';
 import bookingRoutes from './routes/bookings.js';
-import opsRoutes from './routes/ops.js';
+import tenderRoutes from './routes/tenders.js';
+import geoRoutes from './routes/geo.js';
+import paymentRoutes from './routes/payments.js';
 import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
 import { query } from './db/pool.js';
@@ -122,7 +124,17 @@ async function fetchHealthPayload() {
 app.use('/api/sharecharge/auth', authRoutes);
 app.use('/api/sharecharge/stations', stationRoutes);
 app.use('/api/sharecharge/bookings', bookingRoutes);
+app.use('/api/sharecharge/tenders', tenderRoutes);
+app.use('/api/sharecharge/geo', geoRoutes);
+app.use('/api/sharecharge/payments', paymentRoutes);
 app.use('/api/sharecharge/ops', opsRoutes);
+
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    error: 'not_found',
+    detail: `API route ${req.method} ${req.path} not found — deploy latest server on Render`,
+  });
+});
 
 if (hasPublic) {
   app.use(express.static(publicDir, { index: false }));

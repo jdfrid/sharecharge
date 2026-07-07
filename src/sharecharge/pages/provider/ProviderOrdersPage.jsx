@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { useSyncedProviderHost } from '../../hooks/useSyncedProviderHost';
 import { shortTime } from '../../utils';
 import { userDisplay } from '../../auth/identity';
+import { calculateKwhFromSession, formatChargingDuration } from '../../utils/chargingBilling';
 import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
 
@@ -14,8 +15,14 @@ export function ProviderOrdersPage() {
   const stationFor = (booking) => state.stations.find((station) => station.id === booking.stationId);
   const driverFor = (booking) => state.users.find((u) => u.id === booking.driverId);
   const [otpInputs, setOtpInputs] = useState({});
-  const [finishKwh, setFinishKwh] = useState(18.4);
+  const [finishKwh, setFinishKwh] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (repositoryMode !== 'api') return undefined;
@@ -127,24 +134,39 @@ export function ProviderOrdersPage() {
                   </div>
                 )}
 
-                {booking.status === 'charging' && (
-                  <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                {booking.status === 'charging' && (() => {
+                  const station = stationFor(booking);
+                  const autoKwh = calculateKwhFromSession({
+                    startedAt: booking.startedAt,
+                    completedAt: now,
+                    stationPowerKw: station?.power,
+                  });
+                  const kwhValue = finishKwh ?? autoKwh ?? 0.5;
+                  return (
+                  <div className="mt-3">
+                    <p className="text-xs font-bold text-sc-muted">
+                      זמן טעינה: {formatChargingDuration(booking.startedAt, now)}
+                      {autoKwh != null ? ` · חישוב: ${autoKwh} ק״wh` : ''}
+                    </p>
+                    <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
                     <input
                       type="number"
                       step="0.1"
-                      value={finishKwh}
+                      value={kwhValue}
                       onChange={(e) => setFinishKwh(Number(e.target.value))}
                       className="rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
                     />
                     <button
                       type="button"
-                      onClick={() => finishCharge(booking.id, finishKwh)}
+                      onClick={() => finishCharge(booking.id, kwhValue)}
                       className="rounded-sc-sm bg-[var(--sc-accent)] px-4 py-3 font-black text-white"
                     >
                       סיים
                     </button>
+                    </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             ))}
           </div>
