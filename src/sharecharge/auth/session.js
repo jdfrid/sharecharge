@@ -1,8 +1,15 @@
-import { SHARECHARGE_ROLE_KEYS } from '../constants';
-import { clearStoredToken, getAuthToken, getStoredToken } from '../data/sharechargeApi';
+import { clearStoredToken, getAuthToken } from '../data/sharechargeApi';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 
 const AUTH_KEY = 'sharecharge-auth-sessions-v2';
+
+export const AUTH_SESSION_EVENT = 'sharecharge-auth-changed';
+
+function emitAuthChange() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(AUTH_SESSION_EVENT));
+  }
+}
 
 function storage() {
   try {
@@ -60,12 +67,14 @@ export function clearAuthSession(role) {
   delete sessions[role];
   saveAuthSessions(sessions);
   clearStoredToken(role);
+  emitAuthChange();
 }
 
 export function setAuthSession(role, payload) {
   const sessions = loadAuthSessions();
   sessions[role] = payload;
   saveAuthSessions(sessions);
+  emitAuthChange();
 }
 
 /** True when session is valid for entering the app (includes JWT in API mode). */

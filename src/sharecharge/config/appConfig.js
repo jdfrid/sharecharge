@@ -42,6 +42,20 @@ export function getAppDefaultAuthedPath() {
   return AUTH_PATHS[getShareChargeApp()] || '/sharecharge';
 }
 
+const LOGIN_PATHS = {
+  client: '/client/entry',
+  provider: '/provider/entry',
+  ops: '/ops/entry',
+  system: '/ops/entry',
+  all: '/sharecharge',
+};
+
+/** OTP login screen for a portal (use after session expiry). */
+export function getAppLoginPath(portal) {
+  if (portal && LOGIN_PATHS[portal]) return LOGIN_PATHS[portal];
+  return LOGIN_PATHS[getShareChargeApp()] || '/sharecharge';
+}
+
 /** @deprecated use getAppEntryPath() */
 export const appEntryPath = ENTRY_PATHS[_app] || '/sharecharge';
 

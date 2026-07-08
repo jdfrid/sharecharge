@@ -1,6 +1,8 @@
 const nativeModes = new Set(['client', 'provider', 'ops']);
 const DEFAULT_RENDER_API = 'https://sharecharge.onrender.com';
 
+import { clearAuthSession } from '../auth/session';
+
 function resolveApiOrigin() {
   const fromEnv = (import.meta.env.VITE_SHARECHARGE_API_URL || '').replace(/\/$/, '');
   if (fromEnv) return fromEnv;
@@ -250,6 +252,9 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
       message = 'שירות כתובות לא deployed — Render Dashboard → Manual Deploy (Dockerfile).';
     } else if (res.status === 401 || res.status === 403) {
       message = detail || 'נדרש OTP — התחברו מחדש';
+      if (portal && res.status === 401 && !path.startsWith('/auth/')) {
+        clearAuthSession(portal);
+      }
     }
     const err = new Error(message);
     err.status = res.status;

@@ -1,23 +1,46 @@
-import { Cloud, CloudOff, Loader2, Unplug } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Cloud, CloudOff, Loader2, LogIn, Unplug } from 'lucide-react';
 import { useShareCharge } from '../context/ShareChargeContext';
 import { resolveApiPortal } from '../auth/portal';
 import { loadAuthSessions } from '../auth/session';
 import { getAuthToken } from '../data/sharechargeApi';
+import { getAppLoginPath } from '../config/appConfig';
+import { usePortalAuthReady } from '../hooks/usePortalAuthReady';
+
+function LoginButton({ portal, label = 'התחברות עם OTP' }) {
+  const navigate = useNavigate();
+  const loginPath = getAppLoginPath(portal);
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(loginPath)}
+      className="inline-flex items-center gap-1 rounded-full bg-[var(--sc-accent)] px-3 py-1 text-[10px] font-black text-white"
+    >
+      <LogIn size={12} />
+      {label}
+    </button>
+  );
+}
 
 export function SyncStatusBar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { repositoryMode, loading, syncError } = useShareCharge();
   const portal = resolveApiPortal(location);
   const session = loadAuthSessions()[portal];
   const offlineDemo = !!session?.offlineDemo;
-  const hasApiSession = !!(session?.token || getAuthToken(portal));
+  const authReady = usePortalAuthReady(portal);
+  const hasApiSession = authReady && !!(session?.token || getAuthToken(portal));
+  const sessionExpired = !!syncError?.includes('הסשן פג');
+  const loginPath = getAppLoginPath(portal);
+  const onLoginPage = location.pathname.includes('/entry') || location.pathname.includes('/auth');
 
   if (repositoryMode !== 'api' || offlineDemo) {
     return (
-      <div className="sc-sync-bar flex items-center justify-center gap-2 border-b border-amber-100 bg-amber-50/95 px-4 py-2 text-[11px] font-bold leading-5 text-amber-800">
+      <div className="sc-sync-bar flex flex-wrap items-center justify-center gap-2 border-b border-amber-100 bg-amber-50/95 px-4 py-2 text-[11px] font-bold leading-5 text-amber-800">
         <Unplug size={14} />
-        מצב דמו מקומי — אין סנכרון בין אפליקציות. הפעילו שרver והתחברו מחדש (לא דemo).
+        מצב דemo מקומי — אין סנכרון בין אפליקציות. הפעילו שרver והתחברו מחדש (לא דemo).
       </div>
     );
   }
@@ -31,22 +54,46 @@ export function SyncStatusBar() {
     );
   }
 
-  if (syncError) {
+  if (sessionExpired && !onLoginPage) {
     return (
-      <div className="sc-sync-bar flex items-center justify-center gap-2 border-b border-red-100 bg-red-50/90 px-4 py-2 text-xs font-bold text-red-600">
+      <div className="sc-sync-bar flex flex-wrap items-center justify-center gap-2 border-b border-red-100 bg-red-50/90 px-4 py-2 text-xs font-bold text-red-600">
         <CloudOff size={14} />
-        {syncError} — ודאו שה-API פועל
+        {syncError}
+        <LoginButton portal={portal} />
       </div>
     );
   }
 
-  if (!hasApiSession) {
+  if (syncError) {
     return (
-      <div className="sc-sync-bar flex items-center justify-center gap-2 border-b border-amber-100 bg-amber-50/95 px-4 py-2 text-[11px] font-bold leading-5 text-amber-800">
-        <Cloud size={12} />
-        מצב API — התחברו עם OTP (בדיקת שרver: /api/health ב-chrome incognito)
+      <div className="sc-sync-bar flex flex-wrap items-center justify-center gap-2 border-b border-red-100 bg-red-50/90 px-4 py-2 text-xs font-bold text-red-600">
+        <CloudOff size={14} />
+        {syncError}
+        {!onLoginPage ? (
+          <button
+            type="button"
+            onClick={() => navigate(loginPath)}
+            className="rounded-full border border-red-300 px-2 py-0.5 text-[10px] font-black"
+          >
+            נסו התחברות
+          </button>
+        ) : null}
       </div>
     );
+  }
+
+  if (!hasApiSession && !onLoginPage) {
+    return (
+      <div className="sc-sync-bar flex flex-wrap items-center justify-center gap-2 border-b border-amber-100 bg-amber-50/95 px-4 py-2 text-[11px] font-bold leading-5 text-amber-800">
+        <Cloud size={12} />
+        לא מחוברים — התחברו עם OTP לסנכרון הזמנות
+        <LoginButton portal={portal} />
+      </div>
+    );
+  }
+
+  if (!hasApiSession && onLoginPage) {
+    return null;
   }
 
   return (

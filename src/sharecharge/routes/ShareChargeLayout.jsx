@@ -5,8 +5,18 @@ import { ShareChargeSplash } from '../components/ShareChargeSplash';
 import { ClientIntroVideo } from '../components/ClientIntroVideo';
 import { ClientIntroSplash, wasIntroSeen } from '../components/ClientIntroSplash';
 import { SyncStatusBar } from '../components/SyncStatusBar';
+import { SessionExpiryRedirect } from './gates';
 import { usePushNotifications } from '../hooks/usePushNotifications';
-import { getShareChargeApp } from '../config/appConfig';
+import { getShareChargeApp, isSingleAppBuild } from '../config/appConfig';
+import { SHARECHARGE_ROLE_KEYS } from '../constants';
+
+function portalForNativeApp() {
+  const app = getShareChargeApp();
+  if (app === 'client') return SHARECHARGE_ROLE_KEYS.client;
+  if (app === 'provider') return SHARECHARGE_ROLE_KEYS.provider;
+  if (app === 'ops') return SHARECHARGE_ROLE_KEYS.system;
+  return null;
+}
 
 export function ShareChargeLayout() {
   const isClient = getShareChargeApp() === 'client';
@@ -28,6 +38,9 @@ export function ShareChargeLayout() {
       {appReady && (
         <>
           <SyncStatusBar />
+          {isSingleAppBuild() && portalForNativeApp() ? (
+            <SessionExpiryRedirect portal={portalForNativeApp()} />
+          ) : null}
           <Outlet />
         </>
       )}

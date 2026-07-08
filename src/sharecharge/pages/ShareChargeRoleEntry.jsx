@@ -199,7 +199,14 @@ export function ShareChargeRoleEntry({ portal }) {
     sanitizePortalSession(portal);
     if (isPortalSessionReady(portal)) {
       navigate(portalPaths[portal], { replace: true });
+      return;
     }
+    setSentOtp('');
+    setOtpInput('');
+    setDevCode('');
+    setAuthError('');
+    setAuthNotice('');
+    setSentAt(null);
   }, [portal, navigate]);
 
   useEffect(() => {
