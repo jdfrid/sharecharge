@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CircleCheck, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { Card } from './ui/Card';
 import { currency } from '../utils';
 
@@ -25,7 +25,7 @@ export function ProviderEmergencyAlerts({ alerts = [], onDismiss }) {
                   : 'bg-amber-500/15 text-amber-700'
               }`}
             >
-              {alert.kind === 'pending_confirm' ? <CircleCheck size={20} /> : <AlertTriangle size={20} />}
+              {alert.kind === 'pending_confirm' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
             </div>
             <div className="min-w-0 flex-1">
               <p
