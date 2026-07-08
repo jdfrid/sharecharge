@@ -10,6 +10,7 @@ import bookingRoutes from './routes/bookings.js';
 import tenderRoutes from './routes/tenders.js';
 import geoRoutes from './routes/geo.js';
 import paymentRoutes from './routes/payments.js';
+import opsRoutes from './routes/ops.js';
 import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
 import { query } from './db/pool.js';
@@ -80,7 +81,9 @@ app.get('/api/health', async (_req, res) => {
     return res.json({
       ...payload,
       db: false,
-      dbError: 'Database not initialized — check Render Logs for migrate/seed errors',
+      dbError:
+        app.locals.dbError ||
+        'Database not initialized — check Render Logs for migrate/seed errors',
       otpFallback: process.env.ALLOW_DEV_OTP === 'true',
       dataFallback: true,
     });
@@ -143,36 +146,71 @@ if (hasPublic) {
   });
 }
 
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function initDatabase() {
+  if (!process.env.DATABASE_URL || process.env.AUTO_MIGRATE === 'false') return;
+
+  const maxAttempts = Number(process.env.DB_BOOT_RETRIES) || 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await migrate();
+      app.locals.dbReady = true;
+      app.locals.dbError = null;
+      console.log('Database migrations applied.');
+
+      if (process.env.AUTO_SEED !== 'false') {
+        try {
+          await seed();
+          console.log('Seed data applied.');
+        } catch (seedErr) {
+          app.locals.dbSeedError = seedErr.message;
+          console.error('DB seed failed (API still uses DB):', seedErr.message);
+        }
+      }
+      console.log('Database ready.');
+      return;
+    } catch (err) {
+      app.locals.dbError = err.message;
+      console.error(`DB migrate attempt ${attempt}/${maxAttempts} failed:`, err.message);
+      if (attempt < maxAttempts) {
+        await sleep(Math.min(5000 * attempt, 20000));
+      }
+    }
+  }
+}
+
+function enableDevOtpFallback(reason) {
+  if (process.env.ALLOW_DEV_OTP === 'false') {
+    console.warn(reason);
+    return false;
+  }
+  if (process.env.ALLOW_DEV_OTP !== 'true') {
+    process.env.ALLOW_DEV_OTP = 'true';
+  }
+  console.warn(`${reason} — continuing with in-memory OTP/data fallback.`);
+  return true;
+}
+
 async function boot() {
   if (!process.env.DATABASE_URL) {
     console.warn('DATABASE_URL not set — link sharecharge-db in Render Environment.');
-    if (process.env.ALLOW_DEV_OTP !== 'false') {
-      process.env.ALLOW_DEV_OTP = 'true';
-      console.warn('In-memory OTP enabled until DATABASE_URL is linked.');
-    }
-  }
-
-  if (process.env.DATABASE_URL && process.env.AUTO_MIGRATE !== 'false') {
+    enableDevOtpFallback('DATABASE_URL missing');
+  } else {
     try {
-      await migrate();
-      if (process.env.AUTO_SEED !== 'false') {
-        await seed();
-      }
-      app.locals.dbReady = true;
-      console.log('Database ready.');
+      await initDatabase();
     } catch (err) {
-      console.error('DB migrate/seed failed:', err.message);
-      if (process.env.ALLOW_DEV_OTP !== 'true' && process.env.ALLOW_DEV_OTP !== 'false') {
-        process.env.ALLOW_DEV_OTP = 'true';
-        console.warn('In-memory OTP enabled after migrate failure.');
-      } else if (process.env.ALLOW_DEV_OTP !== 'true') {
-        throw err;
-      } else {
-        console.warn('Continuing with in-memory OTP fallback (ALLOW_DEV_OTP=true).');
+      console.error('DB init failed:', err.message);
+    }
+
+    if (!app.locals.dbReady) {
+      const fallback = enableDevOtpFallback('DB migrate failed');
+      if (!fallback && process.env.ALLOW_DEV_OTP === 'false') {
+        throw new Error(app.locals.dbError || 'DB migrate failed');
       }
     }
-  } else if (!process.env.DATABASE_URL) {
-    /* already warned above */
   }
 
   if (!app.locals.dbReady) {

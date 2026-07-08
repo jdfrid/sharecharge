@@ -1,4 +1,4 @@
-import { listMemUsers, loadMemUserByEmail, saveMemUser } from './devAuthStore.js';
+import { listMemUsers, loadMemUserByEmail, saveMemUser, seedMemUsers } from './devAuthStore.js';
 import { isWithinStationGeofence } from './geo.js';
 import { findProvidersInRadius, summarizeEmergencyNotify } from './services/emergencyNotifyService.js';
 import { isChargingStation } from './services/serviceCategories.js';
@@ -325,6 +325,12 @@ function ensureDriverFromJwt(jwtUser) {
 export function initMemDataStore() {
   if (initialized) return;
   users = seedUsers.map((row) => ({ ...row }));
+  seedMemUsers(
+    seedUsers.map((row) => ({
+      ...row,
+      createdAt: row.created_at ?? Date.now(),
+    })),
+  );
   stations = seedStations.map((row) => ({ ...row }));
   bookings = [];
   transactions = [];

@@ -92,6 +92,26 @@ async function resolveUser(normalizedEmail, expectedRole, dbReady, profile = {})
   }
 
   let user = loadMemUserByEmail(normalizedEmail);
+  if (!user && expectedRole === 'admin') {
+    const adminEmails = (process.env.ADMIN_EMAILS || 'admin@sharecharge.app')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean);
+    if (adminEmails.includes(normalizedEmail)) {
+      user = {
+        id: 'admin-1',
+        name: 'מנהל מערכת',
+        email: normalizedEmail,
+        role: 'admin',
+        verified: true,
+        blocked: false,
+        revenue: 0,
+        spend: 0,
+        createdAt: Date.now(),
+      };
+      saveMemUser(user);
+    }
+  }
   if (!user) {
     if (expectedRole === 'admin') {
       throw Object.assign(new Error('Admin account not provisioned'), { status: 403 });
