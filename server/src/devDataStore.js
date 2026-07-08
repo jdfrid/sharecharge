@@ -2,7 +2,7 @@ import { listMemUsers, loadMemUserByEmail, saveMemUser, seedMemUsers } from './d
 import { isWithinStationGeofence } from './geo.js';
 import { findProvidersInRadius, summarizeEmergencyNotify } from './services/emergencyNotifyService.js';
 import { isChargingStation } from './services/serviceCategories.js';
-import { calculateBookingAmount, calculateKwhFromSession } from './chargingBilling.js';
+import { calculateBookingAmount, calculateKwhFromSession } from './services/chargingBilling.js';
 import { createId, createOtp, rowToBooking, rowToDispute, rowToPayment, rowToPaymentMethod, rowToPaymentSplit, rowToServiceBid, rowToServiceRequest, rowToStation, rowToTransaction, rowToUser } from './utils.js';
 
 const settings = {
