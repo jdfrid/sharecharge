@@ -1,3 +1,4 @@
+import { SHARECHARGE_ROLE_KEYS } from '../constants';
 import { clearStoredToken, getAuthToken } from '../data/sharechargeApi';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 
