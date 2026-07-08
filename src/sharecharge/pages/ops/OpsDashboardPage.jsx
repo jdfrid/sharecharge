@@ -16,6 +16,19 @@ import {
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { currency, shortTime } from '../../utils';
 import { Card } from '../../components/ui/Card';
+import {
+  CHARGING_CATEGORY,
+  isChargingStation,
+  serviceCategoryLabel,
+} from '../../utils/serviceCategories';
+
+const STATION_TYPE_OPTIONS = [
+  { value: CHARGING_CATEGORY, label: 'עמדת טעינה' },
+  { value: 'fuel', label: 'SOS — דלק' },
+  { value: 'puncture', label: "SOS — פנצ'ר" },
+  { value: 'tow', label: 'SOS — גרר' },
+  { value: 'garage', label: 'SOS — מוסך / מצבר' },
+];
 
 export function OpsDashboardPage() {
   const { state, addHost, addDriver, addStation, resolveDispute, toggleBlockUser, setCommission, reset } = useShareCharge();
@@ -26,6 +39,7 @@ export function OpsDashboardPage() {
     name: '',
     address: '',
     hostId: hosts[0]?.id || 'host-1',
+    serviceCategory: CHARGING_CATEGORY,
     plug: 'Type 2',
     power: 22,
     pricePerKwh: 1.35,
@@ -34,6 +48,7 @@ export function OpsDashboardPage() {
     lng: 34.78,
     termsText: '',
   });
+  const isSosStation = stationForm.serviceCategory !== CHARGING_CATEGORY;
 
   const totalVolume = state.transactions.reduce((sum, tx) => sum + tx.amount, 0);
   const platformFees = state.transactions.reduce((sum, tx) => sum + tx.platformFee, 0);
@@ -74,6 +89,7 @@ export function OpsDashboardPage() {
       name: '',
       address: '',
       hostId: stationForm.hostId,
+      serviceCategory: stationForm.serviceCategory,
       plug: 'Type 2',
       power: 22,
       pricePerKwh: 1.35,
@@ -167,6 +183,9 @@ export function OpsDashboardPage() {
               </div>
               <span className="rounded-full bg-[var(--sc-accent-2)]/12 px-3 py-1 text-xs font-black text-[var(--sc-accent-2)]">
                 {state.stations.filter((station) => station.hostId === host.id).length} עמדות
+                {state.stations.some((station) => station.hostId === host.id && !isChargingStation(station))
+                  ? ' · SOS'
+                  : ''}
               </span>
             </div>
           ))}
@@ -204,10 +223,35 @@ export function OpsDashboardPage() {
 
       <Card>
         <h3 className="mb-3 flex items-center gap-2 font-black">
-          <PlusCircle size={19} className="text-[var(--sc-accent)]" /> הוספת עמדה
+          <PlusCircle size={19} className="text-[var(--sc-accent)]" /> הוספת עמדה / נקודת SOS
         </h3>
         <form onSubmit={handleAddStation} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
+            <label className="col-span-2 text-sm font-bold text-sc-muted">
+              סוג עמדה
+              <select
+                value={stationForm.serviceCategory}
+                onChange={(e) =>
+                  setStationForm({
+                    ...stationForm,
+                    serviceCategory: e.target.value,
+                  })
+                }
+                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
+              >
+                {STATION_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isSosStation ? (
+              <p className="col-span-2 rounded-sc-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+                נקודת SOS — הספק יקבל התראות חירום בטווח הרדיוס שנבחר על ידי הלקוח (לא רק לפי סוג התקלה).
+                חשוב: lat/lng וכתובת מדויקים.
+              </p>
+            ) : null}
             <label className="col-span-2 text-sm font-bold text-sc-muted">
               שם עמדה
               <input
@@ -238,37 +282,47 @@ export function OpsDashboardPage() {
                 ))}
               </select>
             </label>
-            <label className="text-sm font-bold text-sc-muted">
-              שקע
-              <select
-                value={stationForm.plug}
-                onChange={(e) => setStationForm({ ...stationForm, plug: e.target.value })}
-                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
-              >
-                <option>Type 2</option>
-                <option>CCS</option>
-                <option>CHAdeMO</option>
-              </select>
-            </label>
-            <label className="text-sm font-bold text-sc-muted">
-              kW
-              <input
-                type="number"
-                value={stationForm.power}
-                onChange={(e) => setStationForm({ ...stationForm, power: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
-              />
-            </label>
-            <label className="text-sm font-bold text-sc-muted">
-              ₪/kWh
-              <input
-                type="number"
-                step="0.05"
-                value={stationForm.pricePerKwh}
-                onChange={(e) => setStationForm({ ...stationForm, pricePerKwh: Number(e.target.value) })}
-                className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
-              />
-            </label>
+            {!isSosStation ? (
+              <label className="text-sm font-bold text-sc-muted">
+                שקע
+                <select
+                  value={stationForm.plug}
+                  onChange={(e) => setStationForm({ ...stationForm, plug: e.target.value })}
+                  className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
+                >
+                  <option>Type 2</option>
+                  <option>CCS</option>
+                  <option>CHAdeMO</option>
+                </select>
+              </label>
+            ) : (
+              <div className="flex items-end pb-3 text-xs font-bold text-sc-muted">
+                {serviceCategoryLabel(stationForm.serviceCategory)}
+              </div>
+            )}
+            {!isSosStation ? (
+              <>
+                <label className="text-sm font-bold text-sc-muted">
+                  kW
+                  <input
+                    type="number"
+                    value={stationForm.power}
+                    onChange={(e) => setStationForm({ ...stationForm, power: Number(e.target.value) })}
+                    className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
+                  />
+                </label>
+                <label className="text-sm font-bold text-sc-muted">
+                  ₪/kWh
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={stationForm.pricePerKwh}
+                    onChange={(e) => setStationForm({ ...stationForm, pricePerKwh: Number(e.target.value) })}
+                    className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
+                  />
+                </label>
+              </>
+            ) : null}
             <label className="text-sm font-bold text-sc-muted">
               מרחק מדומה
               <input
@@ -312,7 +366,7 @@ export function OpsDashboardPage() {
             </label>
           </div>
           <button type="submit" className="w-full rounded-sc-md bg-gradient-to-br from-slate-800 to-slate-950 py-3.5 font-black text-white shadow-sc-card">
-            הוסף עמדה
+            {isSosStation ? 'הוסף נקודת SOS' : 'הוסף עמדת טעינה'}
           </button>
         </form>
       </Card>
@@ -346,7 +400,8 @@ export function OpsDashboardPage() {
                 <div>
                   <p className="font-black">{station.name}</p>
                   <p className="text-xs text-sc-muted">
-                    {count} עסקאות · עמלה {currency(fees)}
+                    {serviceCategoryLabel(station.serviceCategory)}
+                    {count ? ` · ${count} עסקאות · עמלה ${currency(fees)}` : ''}
                   </p>
                 </div>
                 <strong>{currency(volume)}</strong>

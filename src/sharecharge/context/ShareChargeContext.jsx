@@ -328,6 +328,8 @@ export function ShareChargeProvider({ children }) {
         if (useApi) return afterApi(SHARECHARGE_ROLE_KEYS.system, () => sharechargeApi.addStation(SHARECHARGE_ROLE_KEYS.system, stationData));
         return update((draft) => {
           const host = draft.users.find((user) => user.id === stationData.hostId);
+          const serviceCategory = stationData.serviceCategory || 'charging';
+          const isSos = serviceCategory !== 'charging';
           draft.stations.unshift({
             id: createId('station'),
             hostId: stationData.hostId,
@@ -336,17 +338,17 @@ export function ShareChargeProvider({ children }) {
             lat: stationData.lat != null ? Number(stationData.lat) : 32.08,
             lng: stationData.lng != null ? Number(stationData.lng) : 34.78,
             distance: Number(stationData.distance || 1),
-            power: Number(stationData.power || 11),
-            plug: stationData.plug || 'Type 2',
-            pricePerKwh: Number(stationData.pricePerKwh || 1.25),
+            power: isSos ? 0 : Number(stationData.power || 11),
+            plug: isSos ? '—' : stationData.plug || 'Type 2',
+            pricePerKwh: isSos ? 0 : Number(stationData.pricePerKwh || 1.25),
             available: true,
             rating: 5,
             photos: 0,
-            termsText: stationData.termsText || '',
-            serviceCategory: 'charging',
+            termsText: stationData.termsText || (isSos ? 'שירות חירום · נוסף על ידי מנהל' : ''),
+            serviceCategory,
             createdAt: Date.now(),
           });
-          addEvent(draft, `מנהל הוסיף עמדה חדשה${host ? ` עבור ${host.name}` : ''}`);
+          addEvent(draft, `מנהל הוסיף ${isSos ? 'נקודת SOS' : 'עמדה חדשה'}${host ? ` עבור ${host.name}` : ''}`);
         });
       },
       addHost: async (hostData) => {

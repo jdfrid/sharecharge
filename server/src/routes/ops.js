@@ -4,6 +4,15 @@ import { authRequired, requireRole } from '../middleware/auth.js';
 import { addEvent, loadFullState } from '../services/stateService.js';
 import { geocodeAddressIsrael, isDefaultTelAvivCoords } from '../services/geocodeService.js';
 import { createId, rowToStation, rowToUser } from '../utils.js';
+import { CHARGING_CATEGORY } from '../services/serviceCategories.js';
+
+const SOS_CATEGORIES = new Set(['fuel', 'puncture', 'tow', 'garage', 'battery', 'bakery']);
+
+function normalizeStationCategory(raw) {
+  const value = String(raw || CHARGING_CATEGORY).trim();
+  if (value === CHARGING_CATEGORY || SOS_CATEGORIES.has(value)) return value;
+  return CHARGING_CATEGORY;
+}
 
 const router = Router();
 
@@ -78,6 +87,8 @@ router.post('/stations', authRequired, requireRole('admin'), async (req, res) =>
       return res.status(400).json({ error: 'Invalid station data' });
     }
     const id = createId('station');
+    const serviceCategory = normalizeStationCategory(d.serviceCategory);
+    const isSos = serviceCategory !== CHARGING_CATEGORY;
     let lat = Number(d.lat);
     let lng = Number(d.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || isDefaultTelAvivCoords(lat, lng)) {
@@ -91,8 +102,8 @@ router.post('/stations', authRequired, requireRole('admin'), async (req, res) =>
       }
     }
     await query(
-      `INSERT INTO stations (id, host_id, name, address, lat, lng, distance, power, plug, price_per_kwh, available, rating, photos, terms_text, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,5,0,$11,$12)`,
+      `INSERT INTO stations (id, host_id, name, address, lat, lng, distance, power, plug, price_per_kwh, available, rating, photos, terms_text, service_category, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,5,0,$11,$12,$13)`,
       [
         id,
         d.hostId,
@@ -101,14 +112,15 @@ router.post('/stations', authRequired, requireRole('admin'), async (req, res) =>
         lat,
         lng,
         Number(d.distance) || 1,
-        Number(d.power) || 22,
-        d.plug || 'Type 2',
-        Number(d.pricePerKwh) || 1.35,
-        d.termsText || '',
+        isSos ? 0 : Number(d.power) || 22,
+        isSos ? '—' : d.plug || 'Type 2',
+        isSos ? 0 : Number(d.pricePerKwh) || 1.35,
+        d.termsText || (isSos ? 'שירות חירום · נוסף על ידי מנהל' : ''),
+        serviceCategory,
         Date.now(),
       ],
     );
-    await addEvent(`מנהל הוסיף עמדה חדשה: ${d.name}`);
+    await addEvent(`מנהל הוסיף ${isSos ? 'נקודת SOS' : 'עמדה'}: ${d.name}`);
     const { rows } = await query('SELECT * FROM stations WHERE id = $1', [id]);
     res.status(201).json({ station: rowToStation(rows[0]) });
   } catch (err) {
