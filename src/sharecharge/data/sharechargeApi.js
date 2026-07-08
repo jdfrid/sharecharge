@@ -70,20 +70,27 @@ function parseHealthPayload(text = '') {
   return null;
 }
 
-function blockedResponseMessage(text = '') {
+function blockedResponseMessage(text = '', context = '') {
   if (/netfree\.link/i.test(text)) {
     return 'NetFree חוסם את onrender.com. השתמשו ברשת ללא סינון, או חברו דומיין משלכם ב-Render (למשל api.sharecharge.app).';
   }
   const trimmed = text.trim();
-  if (
+  const isSpaShell =
+    trimmed.includes('<div id="root"') || trimmed.includes('/assets/index-');
+  const isHtml =
     trimmed.startsWith('<!DOCTYPE') ||
     trimmed.startsWith('<html') ||
-    trimmed.includes('<div id="root"') ||
-    trimmed.includes('/assets/index-')
-  ) {
-    return 'כתובת /api/health מחזירה את האתר (HTML) במקום JSON — ה-API לא deployed. ב-Render: Manual Deploy עם Dockerfile.';
+    trimmed.includes('Cannot GET') ||
+    trimmed.includes('Cannot POST');
+  if (!isSpaShell && !isHtml) return null;
+
+  if (context.includes('/tenders')) {
+    return 'שירות חירום (tenders) לא deployed בשרver — Render Dashboard → sharecharge → Manual Deploy (Dockerfile).';
   }
-  return null;
+  if (isSpaShell) {
+    return 'כתובת השרת מחזירה את האתר (HTML) במקום JSON — ה-API לא deployed. ב-Render: Manual Deploy עם Dockerfile.';
+  }
+  return 'השרver מחזיר HTML במקום JSON — גרסה ישנה או API לא deployed. ב-Render: Manual Deploy (Dockerfile).';
 }
 
 export function getApiOrigin() {
@@ -143,7 +150,7 @@ export async function checkApiHealth({ retries = 3, delayMs = 12000 } = {}) {
     try {
       const res = await fetchWithTimeout(url, 22000);
       const text = await res.text();
-      const blocked = blockedResponseMessage(text);
+      const blocked = blockedResponseMessage(text, '/api/health');
       if (blocked) {
         return { ok: false, reason: 'html-not-api', message: blocked, attempt };
       }
@@ -223,7 +230,12 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
 
   let data = null;
   const text = await res.text();
-  const blocked = blockedResponseMessage(text);
+  if (res.status === 404 && path.includes('/tenders')) {
+    const err = new Error('שירות חירום לא deployed בשרver — Render Dashboard → Manual Deploy (Dockerfile).');
+    err.status = 404;
+    throw err;
+  }
+  const blocked = blockedResponseMessage(text, path);
   if (blocked) {
     const err = new Error(blocked);
     err.blocked = true;
