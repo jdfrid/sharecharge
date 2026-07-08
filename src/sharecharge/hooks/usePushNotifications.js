@@ -25,9 +25,12 @@ export function notifyNewTenderBid({ providerName, total, etaMinutes }) {
   }
 }
 
-export function notifyEmergencyTender({ categoryLabel, addressText, distanceKm }) {
+export function notifyEmergencyTender({ categoryLabel, addressText, distanceKm, problemDescription, phone }) {
   const dist = distanceKm != null ? `${distanceKm} ק״מ` : 'באזור';
-  const body = `${categoryLabel || 'חירום'} · ${dist} · ${addressText || 'מיקום GPS'}`;
+  const details = [categoryLabel || 'חירום', dist, addressText || 'מיקום GPS'];
+  if (problemDescription) details.push(problemDescription.slice(0, 60));
+  if (phone) details.push(phone);
+  const body = details.join(' · ');
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     try {
       new Notification('קריאת חירום — ShareCharge', { body, tag: 'sharecharge-emergency' });

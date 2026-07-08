@@ -9,7 +9,7 @@ import { requireClientAuth } from '../../utils/requireClientAuth';
 import { fallbackAreaName } from '../../utils/reverseGeocode';
 import { buildNearbyList } from '../../utils/stationSearch';
 import { buildEmergencyProviders, emergencyCategoryLabel } from '../../utils/emergencyProviders';
-import { filterEmergencyStations } from '../../utils/serviceCategories';
+import { isEmergencyProviderStation } from '../../utils/serviceCategories';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { useResolvedStationCoords } from '../../hooks/useResolvedStationCoords';
 import { applyStationCoords } from '../../utils/stationCoordinates';
@@ -101,14 +101,14 @@ function ClientEmergencyRequestForm({ category: categoryParam }) {
   const addressSearch = useAddressSearch({ gpsOrigin, gpsLabel });
   const searchOrigin = addressSearch.usingGps ? gpsOrigin : addressSearch.origin;
 
-  const emergencyStationsForCategory = useMemo(
-    () => filterEmergencyStations(state.stations, category),
-    [state.stations, category],
+  const emergencyStations = useMemo(
+    () => (state.stations || []).filter(isEmergencyProviderStation),
+    [state.stations],
   );
-  const resolvedCoords = useResolvedStationCoords(emergencyStationsForCategory);
+  const resolvedCoords = useResolvedStationCoords(emergencyStations);
   const geocodedStations = useMemo(
-    () => emergencyStationsForCategory.map((station) => applyStationCoords(station, resolvedCoords)),
-    [emergencyStationsForCategory, resolvedCoords],
+    () => emergencyStations.map((station) => applyStationCoords(station, resolvedCoords)),
+    [emergencyStations, resolvedCoords],
   );
 
   const providers = useMemo(() => {
@@ -116,11 +116,10 @@ function ClientEmergencyRequestForm({ category: categoryParam }) {
     return buildEmergencyProviders({
       stations: geocodedStations,
       users: state.users,
-      category,
       origin,
       maxDistance,
     });
-  }, [geocodedStations, state.users, category, searchOrigin, gpsOrigin, maxDistance]);
+  }, [geocodedStations, state.users, searchOrigin, gpsOrigin, maxDistance]);
 
   const { items: nearbyProviders, expanded } = useMemo(
     () =>
@@ -200,9 +199,9 @@ function ClientEmergencyRequestForm({ category: categoryParam }) {
       </Link>
 
       <Card>
-        <h1 className="text-xl font-black">{meta.label} · ספקים באזור</h1>
+        <h1 className="text-xl font-black">{meta.label} · ספקי חירום באזור</h1>
         <p className="mt-1 text-sm font-bold text-sc-muted">
-          רשימת ספקים לפי סוג התקלה · שליחה שולחת התראת חירום לכל הספקים הרלוונטיים
+          כל ספקי החירום בטווח יקבלו התראה — לא רק לפי סוג התקלה · ספקי טעינה לא מקבלים
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {categories.map((item) => (
@@ -306,7 +305,7 @@ function ClientEmergencyRequestForm({ category: categoryParam }) {
       {expanded ? (
         <Card>
           <p className="text-center text-sm font-bold text-amber-800">
-            אין ספקי {emergencyCategoryLabel(category)} בטווח {maxDistance} ק״מ — מציגים את כל הרלוונטיים
+            אין ספקי חירום בטווח {maxDistance} ק״מ — מציגים את כל הספקים באזור
           </p>
         </Card>
       ) : null}
@@ -314,7 +313,7 @@ function ClientEmergencyRequestForm({ category: categoryParam }) {
       {nearbyProviders.length === 0 ? (
         <Card>
           <p className="text-center text-sm font-bold text-sc-muted">
-            לא נמצאו ספקים ל{emergencyCategoryLabel(category)} בטווח — אפשר עדיין לשלוח קריאה; ספקים רלוונטיים יקבלו התראה
+            לא נמצאו ספקי חירום בטווח — אפשר עדיין לשלוח קריאה; כל ספקי החירום באזור יקבלו התראה
           </p>
         </Card>
       ) : null}
@@ -356,7 +355,7 @@ function ClientEmergencyRequestForm({ category: categoryParam }) {
         <p className="text-sm font-bold text-sc-muted">
           {selectedId
             ? `נבחר: ${nearbyProviders.find((item) => item.id === selectedId)?.name || 'ספק'}`
-            : `שליחה תודיע לכל ספקי ${emergencyCategoryLabel(category)} באזור (${nearbyProviders.length})`}
+            : `שליחה תודיע לכל ספקי החירום באזור (${nearbyProviders.length}) — לא ספקי טעינה`}
         </p>
         <button
           type="button"

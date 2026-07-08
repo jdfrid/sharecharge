@@ -1,20 +1,18 @@
 import { EMERGENCY_CATEGORIES } from '../constants';
 import { distanceToStation } from './geo';
 import {
-  filterEmergencyStations,
   isEmergencyProviderStation,
   normalizeServiceCategory,
-  serviceCategoriesForEmergency,
   serviceCategoryLabel,
-  stationMatchesEmergencyCategory,
 } from './serviceCategories';
 
 export { EMERGENCY_SERVICE_MAP, serviceCategoriesForEmergency } from './serviceCategories';
 
-export function buildEmergencyProviders({ stations = [], users = [], category, origin, maxDistance = 50 }) {
+/** All emergency (non-charging) providers within radius — not filtered by request category. */
+export function buildEmergencyProviders({ stations = [], users = [], origin, maxDistance = 50 }) {
   if (!origin?.lat || !origin?.lng) return [];
 
-  const relevantStations = filterEmergencyStations(stations, category);
+  const relevantStations = (stations || []).filter(isEmergencyProviderStation);
   const providers = [];
 
   for (const station of relevantStations) {
@@ -48,14 +46,12 @@ export function buildEmergencyProviders({ stations = [], users = [], category, o
     .sort((a, b) => a.computedDistance - b.computedDistance);
 }
 
+/** Provider sees open emergency calls if they have any emergency station within notify radius. */
 export function tenderMatchesProvider({ request, stations = [], hostId, maxDistance = 100 }) {
   if (!request || request.status !== 'open') return false;
 
   const hostStations = stations.filter(
-    (station) =>
-      station.hostId === hostId
-      && isEmergencyProviderStation(station)
-      && stationMatchesEmergencyCategory(station, request.category),
+    (station) => station.hostId === hostId && isEmergencyProviderStation(station),
   );
   if (!hostStations.length) return false;
 
@@ -72,10 +68,7 @@ export function tenderMatchesProvider({ request, stations = [], hostId, maxDista
 
 export function distanceToTender({ request, stations = [], hostId }) {
   const hostStations = stations.filter(
-    (station) =>
-      station.hostId === hostId
-      && isEmergencyProviderStation(station)
-      && stationMatchesEmergencyCategory(station, request?.category),
+    (station) => station.hostId === hostId && isEmergencyProviderStation(station),
   );
   if (!hostStations.length || request?.lat == null) return null;
 

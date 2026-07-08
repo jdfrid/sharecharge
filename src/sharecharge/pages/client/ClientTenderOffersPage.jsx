@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Star } from 'lucide-react';
+import { ChevronLeft, Loader2, Star } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { useTenders } from '../../hooks/useTenders';
 import { notifyNewTenderBid } from '../../hooks/usePushNotifications';
@@ -29,6 +29,12 @@ export function ClientTenderOffersPage() {
   const bids = useMemo(() => bidsFor(id).filter((item) => item.status === 'pending'), [bidsFor, id]);
 
   useEffect(() => {
+    if (request?.status === 'assigned') {
+      navigate(`/client/track/${id}`, { replace: true });
+    }
+  }, [request?.status, id, navigate]);
+
+  useEffect(() => {
     if (bids.length > prevBidCount.current && prevBidCount.current > 0) {
       const latest = bids[bids.length - 1];
       notifyNewTenderBid({
@@ -49,7 +55,7 @@ export function ClientTenderOffersPage() {
     setBusy(bidId);
     try {
       await acceptTenderBid(id, bidId);
-      navigate(`/client/track/${id}`, { replace: true });
+      await refresh?.('client');
     } catch (err) {
       alert(err?.message || 'בחירת ההצעה נכשלה');
     } finally {
@@ -83,6 +89,11 @@ export function ClientTenderOffersPage() {
     );
   }
 
+  const waitingForProvider = request.status === 'pending_provider';
+  const selectedHost = waitingForProvider
+    ? state.users.find((user) => user.id === request.hostId)?.name
+    : null;
+
   return (
     <>
       <Link
@@ -101,62 +112,77 @@ export function ClientTenderOffersPage() {
         ) : null}
       </Card>
 
-      <div className="space-y-2">
-        {bids.map((bid) => (
-          <div
-            key={bid.id}
-            className="w-full rounded-sc-md border border-white/90 bg-white/85 p-4 text-right shadow-sm backdrop-blur-md"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-black text-sc-text">{hostName(bid.hostId)}</p>
-                <p className="mt-1 text-xs font-bold text-sc-muted">
-                  {(bid.lineItems || []).map((line) => line.label).join(' · ')}
-                </p>
-                {bid.driverCounterTotal != null ? (
-                  <p className="mt-2 text-[11px] font-bold text-amber-800">
-                    הצעה נגדית שלך: {currency(bid.driverCounterTotal)} · {bid.driverCounterEtaMinutes} דק
-                  </p>
-                ) : null}
-                <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-600">
-                  <Star size={12} />
-                  4.8
-                </p>
-              </div>
-              <div className="text-left">
-                <p className="text-lg font-black text-[var(--sc-accent)]">{currency(bid.total)}</p>
-                <p className="text-xs font-bold text-sc-muted">{bid.etaMinutes} דק</p>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={busy === bid.id}
-                onClick={() => chooseBid(bid.id)}
-                className="rounded-sc-sm bg-[var(--sc-accent)] py-2.5 text-xs font-black text-white disabled:opacity-60"
-              >
-                {busy === bid.id ? '…' : 'אשר הצעה'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCounterFor(bid.id);
-                  setCounterTotal(String(Math.max(0, Math.round(bid.total * 0.85))));
-                  setCounterEta(String(bid.etaMinutes));
-                }}
-                className="rounded-sc-sm border border-sc-border bg-white py-2.5 text-xs font-black text-sc-text"
-              >
-                הצעה נגדית
-              </button>
-            </div>
+      {waitingForProvider ? (
+        <Card className="border-amber-200 bg-amber-50/90">
+          <div className="flex items-center gap-2">
+            <Loader2 size={18} className="animate-spin text-amber-700" />
+            <p className="font-black text-amber-900">ממתין לאישור ספק</p>
           </div>
-        ))}
-        {!bids.length ? (
-          <p className="rounded-sc-md border border-dashed border-sc-border p-6 text-center text-sm font-bold text-sc-muted">
-            ממתין להצעות מספקים…
+          <p className="mt-2 text-sm font-bold text-sc-muted">
+            בחרת את {selectedHost || 'הספק'} · {currency(request.amount)} — הספק צריך לאשר באפליקציה
           </p>
-        ) : null}
-      </div>
+          <p className="mt-1 text-xs font-bold text-sc-muted">לאחר אישור הספק תועברו אוטומטית למעקב</p>
+        </Card>
+      ) : null}
+
+      {!waitingForProvider ? (
+        <div className="space-y-2">
+          {bids.map((bid) => (
+            <div
+              key={bid.id}
+              className="w-full rounded-sc-md border border-white/90 bg-white/85 p-4 text-right shadow-sm backdrop-blur-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-sc-text">{hostName(bid.hostId)}</p>
+                  <p className="mt-1 text-xs font-bold text-sc-muted">
+                    {(bid.lineItems || []).map((line) => line.label).join(' · ')}
+                  </p>
+                  {bid.driverCounterTotal != null ? (
+                    <p className="mt-2 text-[11px] font-bold text-amber-800">
+                      הצעה נגדית שלך: {currency(bid.driverCounterTotal)} · {bid.driverCounterEtaMinutes} דק
+                    </p>
+                  ) : null}
+                  <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-600">
+                    <Star size={12} />
+                    4.8
+                  </p>
+                </div>
+                <div className="text-left">
+                  <p className="text-lg font-black text-[var(--sc-accent)]">{currency(bid.total)}</p>
+                  <p className="text-xs font-bold text-sc-muted">{bid.etaMinutes} דק</p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={busy === bid.id}
+                  onClick={() => chooseBid(bid.id)}
+                  className="rounded-sc-sm bg-[var(--sc-accent)] py-2.5 text-xs font-black text-white disabled:opacity-60"
+                >
+                  {busy === bid.id ? '…' : 'בחר הצעה'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCounterFor(bid.id);
+                    setCounterTotal(String(Math.max(0, Math.round(bid.total * 0.85))));
+                    setCounterEta(String(bid.etaMinutes));
+                  }}
+                  className="rounded-sc-sm border border-sc-border bg-white py-2.5 text-xs font-black text-sc-text"
+                >
+                  הצעה נגדית
+                </button>
+              </div>
+            </div>
+          ))}
+          {!bids.length ? (
+            <p className="rounded-sc-md border border-dashed border-sc-border p-6 text-center text-sm font-bold text-sc-muted">
+              ממתין להצעות מספקי חירום באזור…
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {counterFor ? (
         <Card>

@@ -493,11 +493,40 @@ export function ShareChargeProvider({ children }) {
           const request = draft.serviceRequests?.find((item) => item.id === requestId);
           const bid = draft.serviceBids?.find((item) => item.id === bidId);
           if (!request || !bid) return;
-          request.status = 'assigned';
+          request.status = 'pending_provider';
           request.acceptedBidId = bidId;
           request.hostId = bid.hostId;
           request.amount = bid.total;
           bid.status = 'accepted';
+        });
+      },
+      confirmTenderAssignment: async (requestId) => {
+        if (useApi) {
+          const data = await sharechargeApi.confirmTenderAssignment(SHARECHARGE_ROLE_KEYS.provider, requestId);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.provider);
+          return data;
+        }
+        update((draft) => {
+          const request = draft.serviceRequests?.find((item) => item.id === requestId);
+          if (!request || request.status !== 'pending_provider') return;
+          request.status = 'assigned';
+        });
+      },
+      declineTenderAssignment: async (requestId) => {
+        if (useApi) {
+          const data = await sharechargeApi.declineTenderAssignment(SHARECHARGE_ROLE_KEYS.provider, requestId);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.provider);
+          return data;
+        }
+        update((draft) => {
+          const request = draft.serviceRequests?.find((item) => item.id === requestId);
+          const bid = draft.serviceBids?.find((item) => item.id === request?.acceptedBidId);
+          if (!request || request.status !== 'pending_provider') return;
+          request.status = 'open';
+          request.acceptedBidId = null;
+          request.hostId = null;
+          request.amount = 0;
+          if (bid) bid.status = 'pending';
         });
       },
       counterTenderBid: async (requestId, bidId, payload) => {

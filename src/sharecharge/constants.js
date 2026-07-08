@@ -137,7 +137,8 @@ export const EMERGENCY_NAV_TILES = [
 
 export const tenderStatusLabels = {
   open: 'ממתין להצעות',
-  assigned: 'ספק נבחר',
+  pending_provider: 'ממתין לאישור ספק',
+  assigned: 'ספק אישר — בדרך',
   in_progress: 'בדרך אליך',
   completed: 'הושלם',
   cancelled: 'בוטל',

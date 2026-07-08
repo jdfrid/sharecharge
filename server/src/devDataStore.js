@@ -643,12 +643,11 @@ export function createTenderMem(jwtUser, payload) {
   const providers = findProvidersInRadius({
     stations,
     users: listMemUsers(),
-    category,
     lat: Number(lat),
     lng: Number(lng),
     radiusKm: radius,
   });
-  const notify = summarizeEmergencyNotify({ providers, radiusKm: radius });
+  const notify = summarizeEmergencyNotify({ providers, radiusKm: radius, category });
   return { request: rowToServiceRequest(row), notify };
 }
 
@@ -735,7 +734,7 @@ export function acceptBidMem(jwtUser, requestId, bidId) {
     return { error: 'forbidden', status: 403 };
   }
 
-  request.status = 'assigned';
+  request.status = 'pending_provider';
   request.accepted_bid_id = bidId;
   request.host_id = bid.host_id;
   request.amount = bid.total;
@@ -743,8 +742,35 @@ export function acceptBidMem(jwtUser, requestId, bidId) {
   serviceBids.filter((row) => row.request_id === requestId && row.id !== bidId).forEach((row) => {
     row.status = 'rejected';
   });
-  addEventMem('נהג בחר הצעת מחיר', 'activity');
+  addEventMem('נהג בחר הצעה — ממתין לאישור ספק', 'activity');
   return { request: rowToServiceRequest(request), bid: rowToServiceBid(bid) };
+}
+
+export function confirmBidMem(jwtUser, requestId) {
+  if (!initialized) initMemDataStore();
+  const request = serviceRequests.find((row) => row.id === requestId);
+  if (!request || request.host_id !== jwtUser.sub || request.status !== 'pending_provider') {
+    return { error: 'not_found', status: 404 };
+  }
+  request.status = 'assigned';
+  addEventMem('ספק אישר את ההצעה', 'activity');
+  return { request: rowToServiceRequest(request) };
+}
+
+export function declineBidMem(jwtUser, requestId) {
+  if (!initialized) initMemDataStore();
+  const request = serviceRequests.find((row) => row.id === requestId);
+  if (!request || request.host_id !== jwtUser.sub || request.status !== 'pending_provider') {
+    return { error: 'not_found', status: 404 };
+  }
+  const bid = serviceBids.find((row) => row.id === request.accepted_bid_id);
+  request.status = 'open';
+  request.accepted_bid_id = null;
+  request.host_id = null;
+  request.amount = 0;
+  if (bid) bid.status = 'pending';
+  addEventMem('ספק דחה את ההצעה', 'activity');
+  return { request: rowToServiceRequest(request) };
 }
 
 export function updateTenderLocationMem(requestId, jwtUser, { lat, lng, role }) {

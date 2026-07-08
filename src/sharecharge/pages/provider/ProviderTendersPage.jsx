@@ -10,7 +10,8 @@ import { Card } from '../../components/ui/Card';
 import { ProviderBidSheet } from '../../components/provider/ProviderBidSheet';
 
 export function ProviderTendersPage() {
-  const { state, submitTenderBid, completeTender, reviseTenderBid } = useShareCharge();
+  const { state, submitTenderBid, completeTender, reviseTenderBid, confirmTenderAssignment, declineTenderAssignment } =
+    useShareCharge();
   const { activeHostId: hostId } = useSyncedProviderHost(state);
   const [activeId, setActiveId] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -43,6 +44,11 @@ export function ProviderTendersPage() {
     [state.serviceRequests, state.stations, hostId],
   );
 
+  const pendingConfirmations = useMemo(
+    () => (state.serviceRequests || []).filter((item) => item.status === 'pending_provider' && item.hostId === hostId),
+    [state.serviceRequests, hostId],
+  );
+
   const myAssigned = useMemo(
     () =>
       (state.serviceRequests || []).filter(
@@ -69,9 +75,64 @@ export function ProviderTendersPage() {
       <Card>
         <h2 className="text-lg font-black">מכרזים פתוחים</h2>
         <p className="mt-1 text-sm font-bold text-sc-muted">
-          קריאות חירום בתחום השירות שלך — הגישו מחיר וזמן הגעה
+          כל קריאת חירום באזור מגיעה לכל ספקי החירום — הגישו מחיר וזמן הגעה
         </p>
       </Card>
+
+      {pendingConfirmations.length ? (
+        <>
+          <Card className="border-[var(--sc-accent)]/25 bg-[var(--sc-accent)]/[0.06]">
+            <h2 className="text-lg font-black text-[var(--sc-accent)]">אישור הדדי — לקוח בחר אותך</h2>
+            <p className="mt-1 text-sm font-bold text-sc-muted">אשרו את ההצעה כדי להתחיל · או דחו כדי להישאר פנויים</p>
+          </Card>
+          {pendingConfirmations.map((request) => (
+            <Card key={request.id} className="ring-2 ring-[var(--sc-accent)]/20">
+              <p className="font-black">{categoryLabel(request.category)}</p>
+              <p className="mt-1 text-sm font-bold text-sc-muted">{request.addressText}</p>
+              {request.problemDescription ? (
+                <p className="mt-1 text-xs font-bold text-sc-text">{request.problemDescription}</p>
+              ) : null}
+              <p className="mt-2 text-lg font-black text-[var(--sc-accent)]">₪{request.amount}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await declineTenderAssignment(request.id);
+                    } catch (err) {
+                      alert(err?.message || 'דחייה נכשלה');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  className="rounded-sc-sm border border-sc-border py-2.5 text-xs font-black"
+                >
+                  דחה
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await confirmTenderAssignment(request.id);
+                    } catch (err) {
+                      alert(err?.message || 'אישור נכשל');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  className="rounded-sc-sm bg-[var(--sc-accent)] py-2.5 text-xs font-black text-white"
+                >
+                  מאשר — יוצא לדרך
+                </button>
+              </div>
+            </Card>
+          ))}
+        </>
+      ) : null}
 
       <div className="space-y-2">
         {openRequests.map((request) => (

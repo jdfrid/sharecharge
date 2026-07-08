@@ -19,6 +19,10 @@ export function serviceCategoriesForEmergency(categoryId) {
   return EMERGENCY_SERVICE_MAP[categoryId] || [];
 }
 
+export function isEmergencyProviderStation(station) {
+  return !isChargingStation(station);
+}
+
 export function matchesEmergencyCategory(station, emergencyCategory) {
   const allowed = serviceCategoriesForEmergency(emergencyCategory);
   if (!allowed.length) return false;

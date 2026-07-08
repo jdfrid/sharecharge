@@ -313,6 +313,10 @@ export const sharechargeApi = {
     apiRequest(`/tenders/${id}/bids`, { method: 'POST', body: payload, portal }),
   acceptTenderBid: (portal, requestId, bidId) =>
     apiRequest(`/tenders/${requestId}/accept/${bidId}`, { method: 'POST', portal }),
+  confirmTenderAssignment: (portal, requestId) =>
+    apiRequest(`/tenders/${requestId}/confirm`, { method: 'POST', portal }),
+  declineTenderAssignment: (portal, requestId) =>
+    apiRequest(`/tenders/${requestId}/decline`, { method: 'POST', portal }),
   counterTenderBid: (portal, requestId, bidId, payload) =>
     apiRequest(`/tenders/${requestId}/bids/${bidId}/counter`, { method: 'POST', body: payload, portal }),
   reviseTenderBid: (portal, requestId, bidId, payload) =>

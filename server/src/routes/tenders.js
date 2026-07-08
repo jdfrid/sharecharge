@@ -3,8 +3,10 @@ import { query } from '../db/pool.js';
 import {
   acceptBidMem,
   completeTenderMem,
+  confirmBidMem,
   counterBidMem,
   createTenderMem,
+  declineBidMem,
   listOpenTendersMem,
   listTenderBidsMem,
   reviseBidMem,
@@ -80,15 +82,14 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
     const providers = findProvidersInRadius({
       stations: state.stations,
       users: state.users,
-      category,
       lat: Number(lat),
       lng: Number(lng),
       radiusKm: radius,
     });
-    const notify = summarizeEmergencyNotify({ providers, radiusKm: radius });
+    const notify = summarizeEmergencyNotify({ providers, radiusKm: radius, category });
 
     await addEvent(
-      `קריאת חירום (${category}) · ${notify.notifiedCount} ספקים ב-${radius} ק״מ`,
+      `קריאת חירום (${category}) · ${notify.notifiedCount} ספקי חירום ב-${radius} ק״מ`,
       'activity',
       true,
     );
@@ -193,7 +194,7 @@ router.post('/:id/accept/:bidId', authRequired, requireRole('driver'), async (re
     if (!bid) return res.status(404).json({ error: 'not_found' });
 
     await query(
-      `UPDATE service_requests SET status = 'assigned', accepted_bid_id = $1, host_id = $2, amount = $3 WHERE id = $4`,
+      `UPDATE service_requests SET status = 'pending_provider', accepted_bid_id = $1, host_id = $2, amount = $3 WHERE id = $4`,
       [bid.id, bid.host_id, bid.total, req.params.id],
     );
     await query("UPDATE service_bids SET status = 'accepted' WHERE id = $1", [bid.id]);
@@ -201,12 +202,68 @@ router.post('/:id/accept/:bidId', authRequired, requireRole('driver'), async (re
       req.params.id,
       bid.id,
     ]);
+    await addEvent('נהג בחר הצעה — ממתין לאישור ספק', 'activity', true);
 
     const { rows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
     res.json({ request: rowToServiceRequest(rows[0]), bid: rowToServiceBid(bid) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to accept bid' });
+  }
+});
+
+router.post('/:id/confirm', authRequired, requireRole('host'), async (req, res) => {
+  try {
+    if (!dbReady(req)) {
+      const result = confirmBidMem(req.user, req.params.id);
+      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      return res.json(result);
+    }
+
+    const { rows: reqRows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    const request = reqRows[0];
+    if (!request || request.host_id !== req.user.sub || request.status !== 'pending_provider') {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    await query("UPDATE service_requests SET status = 'assigned' WHERE id = $1", [req.params.id]);
+    await addEvent('ספק אישר את ההצעה — השירות יוצא לדרך', 'activity', true);
+    const { rows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    res.json({ request: rowToServiceRequest(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to confirm tender' });
+  }
+});
+
+router.post('/:id/decline', authRequired, requireRole('host'), async (req, res) => {
+  try {
+    if (!dbReady(req)) {
+      const result = declineBidMem(req.user, req.params.id);
+      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      return res.json(result);
+    }
+
+    const { rows: reqRows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    const request = reqRows[0];
+    if (!request || request.host_id !== req.user.sub || request.status !== 'pending_provider') {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    const bidId = request.accepted_bid_id;
+    await query(
+      `UPDATE service_requests SET status = 'open', accepted_bid_id = NULL, host_id = NULL, amount = 0 WHERE id = $1`,
+      [req.params.id],
+    );
+    if (bidId) {
+      await query("UPDATE service_bids SET status = 'pending' WHERE id = $1", [bidId]);
+    }
+    await addEvent('ספק דחה את ההצעה — הקריאה נשארת פתוחה', 'activity', true);
+    const { rows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    res.json({ request: rowToServiceRequest(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to decline tender' });
   }
 });
 
