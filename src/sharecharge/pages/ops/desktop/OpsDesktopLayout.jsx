@@ -47,7 +47,7 @@ export function OpsDesktopLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--sc-bg)] text-[var(--sc-text)]" dir="rtl">
+    <div className="ops-desktop-root min-h-screen bg-[var(--sc-bg)] text-[var(--sc-text)] lg:flex lg:min-h-screen" dir="rtl">
       {sidebarOpen ? (
         <button
           type="button"
@@ -58,7 +58,7 @@ export function OpsDesktopLayout() {
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 right-0 z-50 flex w-64 flex-col border-l border-[var(--sc-border)] bg-white shadow-xl transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 right-0 z-50 flex h-screen w-64 shrink-0 flex-col border-l border-[var(--sc-border)] bg-white shadow-xl transition-transform lg:static lg:z-auto lg:h-auto lg:min-h-screen lg:translate-x-0 lg:shadow-none ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         }`}
       >
@@ -67,7 +67,7 @@ export function OpsDesktopLayout() {
           <h1 className="mt-1 text-lg font-black text-[var(--sc-accent)]">קונסול ניהול</h1>
           <p className="mt-1 text-[11px] font-bold text-sc-muted">ממשק מחשב · מחיקה וניהול נתונים</p>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
@@ -106,8 +106,8 @@ export function OpsDesktopLayout() {
         </div>
       </aside>
 
-      <div className="flex min-h-screen flex-col lg:mr-64">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--sc-border)] bg-white/90 px-4 backdrop-blur">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--sc-border)] bg-white/95 px-4 backdrop-blur">
           <button
             type="button"
             className="rounded-lg p-2 hover:bg-sc-surface lg:hidden"
@@ -127,7 +127,7 @@ export function OpsDesktopLayout() {
           </button>
         </header>
         <main className="flex-1 p-4 lg:p-8">
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto w-full max-w-6xl">
             <Outlet />
           </div>
         </main>

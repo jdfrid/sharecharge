@@ -911,6 +911,12 @@ select option {
   min-height: 4.75rem;
 }
 
+/* Desktop ops console — full viewport, no mobile shell constraints */
+.ops-desktop-root {
+  width: 100%;
+  max-width: none;
+}
+
 .sc-nav-link {
   position: relative;
   display: flex;

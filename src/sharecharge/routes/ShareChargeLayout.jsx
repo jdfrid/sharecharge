@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { ShareChargeProvider } from '../context/ShareChargeContext';
 import { ShareChargeSplash } from '../components/ShareChargeSplash';
 import { ClientIntroVideo } from '../components/ClientIntroVideo';
@@ -19,10 +19,12 @@ function portalForNativeApp() {
 }
 
 export function ShareChargeLayout() {
+  const location = useLocation();
+  const isConsole = location.pathname.startsWith('/ops/console');
   const isClient = getShareChargeApp() === 'client';
-  const [bootDone, setBootDone] = useState(false);
-  const [videoDone, setVideoDone] = useState(!isClient);
-  const [introDone, setIntroDone] = useState(() => wasIntroSeen() || !isClient);
+  const [bootDone, setBootDone] = useState(isConsole);
+  const [videoDone, setVideoDone] = useState(!isClient || isConsole);
+  const [introDone, setIntroDone] = useState(() => wasIntroSeen() || !isClient || isConsole);
 
   const showVideo = bootDone && !videoDone && isClient;
   const showIntro = bootDone && videoDone && !introDone && isClient;
