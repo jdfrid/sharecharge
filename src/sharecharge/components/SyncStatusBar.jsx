@@ -27,12 +27,13 @@ export function SyncStatusBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { repositoryMode, loading, syncError } = useShareCharge();
+  const portal = resolveApiPortal(location);
+  const authReady = usePortalAuthReady(portal);
 
   if (location.pathname.startsWith('/ops/console')) return null;
-  const portal = resolveApiPortal(location);
+
   const session = loadAuthSessions()[portal];
   const offlineDemo = !!session?.offlineDemo;
-  const authReady = usePortalAuthReady(portal);
   const hasApiSession = authReady && !!(session?.token || getAuthToken(portal));
   const sessionExpired = !!syncError?.includes('הסשן פג');
   const loginPath = getAppLoginPath(portal);
