@@ -335,6 +335,16 @@ export const sharechargeApi = {
   deleteDispute: (portal, id) => apiRequest(`/ops/disputes/${id}`, { method: 'DELETE', portal }),
   deletePayment: (portal, id) => apiRequest(`/ops/payments/${id}`, { method: 'DELETE', portal }),
   clearEvents: (portal) => apiRequest('/ops/events', { method: 'DELETE', portal }),
+  updateAdminUser: (portal, id, body) => apiRequest(`/ops/users/${id}`, { method: 'PATCH', body, portal }),
+  updateAdminStation: (portal, id, body) => apiRequest(`/ops/stations/${id}`, { method: 'PATCH', body, portal }),
+  updateAdminBooking: (portal, id, body) => apiRequest(`/ops/bookings/${id}`, { method: 'PATCH', body, portal }),
+  updateAdminTender: (portal, id, body) => apiRequest(`/ops/tenders/${id}`, { method: 'PATCH', body, portal }),
+  updateAdminBid: (portal, requestId, bidId, body) =>
+    apiRequest(`/ops/tenders/${requestId}/bids/${bidId}`, { method: 'PATCH', body, portal }),
+  deleteAdminBid: (portal, requestId, bidId) =>
+    apiRequest(`/ops/tenders/${requestId}/bids/${bidId}`, { method: 'DELETE', portal }),
+  updateAdminDispute: (portal, id, body) => apiRequest(`/ops/disputes/${id}`, { method: 'PATCH', body, portal }),
+  updateAdminPayment: (portal, id, body) => apiRequest(`/ops/payments/${id}`, { method: 'PATCH', body, portal }),
   reportBookingLocation: (portal, id, coords) =>
     apiRequest(`/bookings/${id}/location`, { method: 'POST', body: coords, portal }),
   createTender: (portal, payload) => apiRequest('/tenders', { method: 'POST', body: payload, portal }),

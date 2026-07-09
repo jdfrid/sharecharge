@@ -1,5 +1,42 @@
 import { useState } from 'react';
-import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+
+export function EditButton({ onClick, label = 'ערוך' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-lg border border-[var(--sc-border)] bg-white px-2.5 py-1.5 text-[11px] font-black text-sc-text hover:bg-sc-surface"
+    >
+      <Pencil size={12} />
+      {label}
+    </button>
+  );
+}
+
+export function AddButton({ onClick, label = 'הוסף' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--sc-accent)] px-3 py-2 text-xs font-black text-white hover:opacity-90"
+    >
+      <Plus size={14} />
+      {label}
+    </button>
+  );
+}
+
+export function RowActions({ onEdit, onDelete, deleteConfirm, canDelete = true, canEdit = true }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {canEdit && onEdit ? <EditButton onClick={onEdit} /> : null}
+      {canDelete && onDelete ? (
+        <ConfirmDeleteButton confirmText={deleteConfirm} onConfirm={onDelete} />
+      ) : null}
+    </div>
+  );
+}
 
 export function ConfirmDeleteButton({ label, confirmText, onConfirm, disabled }) {
   const [busy, setBusy] = useState(false);

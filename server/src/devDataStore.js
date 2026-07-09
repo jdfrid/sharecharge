@@ -1135,3 +1135,134 @@ export function resetTestingDataMem() {
   events = [];
   return { ok: true };
 }
+
+function applyMemPatch(target, patch, map) {
+  for (const [key, col] of Object.entries(map)) {
+    if (patch[key] !== undefined) target[col] = patch[key];
+  }
+}
+
+export function updateUserMem(userId, patch) {
+  if (!initialized) initMemDataStore();
+  const user = findUserById(userId);
+  if (!user) return { error: 'not_found', status: 404 };
+  if (user.role === 'admin' && patch.blocked === true) {
+    return { error: 'forbidden', detail: 'לא ניתן לחסום מנהל', status: 403 };
+  }
+  const row = users.find((u) => u.id === userId) || users.find((u) => u.email === user.email);
+  if (row) {
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.email !== undefined) row.email = patch.email.toLowerCase().trim();
+    if (patch.phone !== undefined) row.phone = patch.phone;
+    if (patch.blocked !== undefined) row.blocked = patch.blocked;
+    if (patch.verified !== undefined) row.verified = patch.verified;
+  }
+  return { ok: true, name: user.name };
+}
+
+export function updateStationMem(stationId, patch) {
+  if (!initialized) initMemDataStore();
+  const station = stations.find((s) => s.id === stationId);
+  if (!station) return { error: 'not_found', status: 404 };
+  applyMemPatch(station, patch, {
+    name: 'name',
+    address: 'address',
+    hostId: 'host_id',
+    lat: 'lat',
+    lng: 'lng',
+    distance: 'distance',
+    power: 'power',
+    plug: 'plug',
+    pricePerKwh: 'price_per_kwh',
+    available: 'available',
+    termsText: 'terms_text',
+    serviceCategory: 'service_category',
+  });
+  return { ok: true, name: station.name };
+}
+
+export function updateBookingMem(bookingId, patch) {
+  if (!initialized) initMemDataStore();
+  const booking = bookings.find((b) => b.id === bookingId);
+  if (!booking) return { error: 'not_found', status: 404 };
+  applyMemPatch(booking, patch, {
+    status: 'status',
+    amount: 'amount',
+    kwh: 'kwh',
+    stationId: 'station_id',
+    driverId: 'driver_id',
+    hostId: 'host_id',
+    startTime: 'start_time',
+    durationHours: 'duration_hours',
+  });
+  return { ok: true };
+}
+
+export function updateTenderMem(tenderId, patch) {
+  if (!initialized) initMemDataStore();
+  const tender = serviceRequests.find((r) => r.id === tenderId);
+  if (!tender) return { error: 'not_found', status: 404 };
+  applyMemPatch(tender, patch, {
+    status: 'status',
+    category: 'category',
+    addressText: 'address_text',
+    problemDescription: 'problem_description',
+    phone: 'phone',
+    lat: 'lat',
+    lng: 'lng',
+    amount: 'amount',
+    hostId: 'host_id',
+    driverId: 'driver_id',
+    notifyRadiusKm: 'notify_radius_km',
+  });
+  if (patch.vehicleProfile !== undefined) tender.vehicle_profile = patch.vehicleProfile;
+  return { ok: true, category: tender.category };
+}
+
+export function updateBidMem(requestId, bidId, patch) {
+  if (!initialized) initMemDataStore();
+  const bid = serviceBids.find((b) => b.id === bidId && b.request_id === requestId);
+  if (!bid) return { error: 'not_found', status: 404 };
+  applyMemPatch(bid, patch, {
+    status: 'status',
+    total: 'total',
+    etaMinutes: 'eta_minutes',
+    hostId: 'host_id',
+    driverCounterTotal: 'driver_counter_total',
+    driverCounterEtaMinutes: 'driver_counter_eta_minutes',
+    driverCounterMessage: 'driver_counter_message',
+    driverCounterAt: 'driver_counter_at',
+  });
+  if (patch.lineItems !== undefined) bid.line_items = patch.lineItems;
+  return { ok: true };
+}
+
+export function deleteBidMem(requestId, bidId) {
+  if (!initialized) initMemDataStore();
+  if (!serviceBids.some((b) => b.id === bidId && b.request_id === requestId)) {
+    return { error: 'not_found', status: 404 };
+  }
+  serviceBids = serviceBids.filter((b) => !(b.id === bidId && b.request_id === requestId));
+  return { ok: true };
+}
+
+export function updateDisputeMem(disputeId, patch) {
+  if (!initialized) initMemDataStore();
+  const dispute = disputes.find((d) => d.id === disputeId);
+  if (!dispute) return { error: 'not_found', status: 404 };
+  if (patch.status !== undefined) dispute.status = patch.status;
+  if (patch.reason !== undefined) dispute.reason = patch.reason;
+  return { ok: true };
+}
+
+export function updatePaymentMem(paymentId, patch) {
+  if (!initialized) initMemDataStore();
+  const payment = payments.find((p) => p.id === paymentId);
+  if (!payment) return { error: 'not_found', status: 404 };
+  if (patch.status !== undefined) payment.status = patch.status;
+  if (patch.amount !== undefined) payment.amount = patch.amount;
+  if (patch.title !== undefined) payment.title = patch.title;
+  if (patch.hostId !== undefined) payment.host_id = patch.hostId;
+  if (patch.payerId !== undefined) payment.payer_id = patch.payerId;
+  return { ok: true };
+}

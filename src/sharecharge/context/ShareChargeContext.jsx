@@ -190,20 +190,120 @@ export function ShareChargeProvider({ children }) {
         });
         return { ok: true };
       },
-      deleteAdminEntity: async (type, id) => {
+      updateAdminEntity: async (type, id, patch, extraId) => {
+        const portal = SHARECHARGE_ROLE_KEYS.system;
+        const apiMap = {
+          user: (entityId, body) => sharechargeApi.updateAdminUser(portal, entityId, body),
+          station: (entityId, body) => sharechargeApi.updateAdminStation(portal, entityId, body),
+          booking: (entityId, body) => sharechargeApi.updateAdminBooking(portal, entityId, body),
+          tender: (entityId, body) => sharechargeApi.updateAdminTender(portal, entityId, body),
+          bid: (entityId, body) => sharechargeApi.updateAdminBid(portal, extraId, entityId, body),
+          dispute: (entityId, body) => sharechargeApi.updateAdminDispute(portal, entityId, body),
+          payment: (entityId, body) => sharechargeApi.updateAdminPayment(portal, entityId, body),
+        };
+        if (useApi) {
+          const fn = apiMap[type];
+          if (!fn) throw new Error('Unknown entity type');
+          const data = await fn(id, patch);
+          if (data?.state) setState(data.state);
+          else await refreshFromApi(portal);
+          return data;
+        }
+        update((draft) => {
+          const apply = (list, entityId, fields) => {
+            const item = list?.find((row) => row.id === entityId);
+            if (!item) return;
+            Object.assign(item, fields);
+          };
+          if (type === 'user') apply(draft.users, id, patch);
+          else if (type === 'station') apply(draft.stations, id, patch);
+          else if (type === 'booking') apply(draft.bookings, id, patch);
+          else if (type === 'tender') apply(draft.serviceRequests, id, patch);
+          else if (type === 'bid') apply(draft.serviceBids, id, patch);
+          else if (type === 'dispute') apply(draft.disputes, id, patch);
+          else if (type === 'payment') apply(draft.payments, id, patch);
+          addEvent(draft, `עודכן ${type}`, 'system');
+        });
+        return { ok: true };
+      },
+      createAdminEntity: async (type, payload) => {
+        const portal = SHARECHARGE_ROLE_KEYS.system;
+        if (useApi) {
+          let data;
+          if (type === 'host') data = await sharechargeApi.addHost(portal, payload);
+          else if (type === 'driver') data = await sharechargeApi.addDriver(portal, payload);
+          else if (type === 'station') data = await sharechargeApi.addStation(portal, payload);
+          else throw new Error('Unknown create type');
+          await refreshFromApi(portal);
+          return data;
+        }
+        update((draft) => {
+          if (type === 'host') {
+            draft.users.unshift({
+              id: createId('host'),
+              name: payload.name,
+              email: payload.email,
+              role: 'host',
+              verified: true,
+              blocked: false,
+              revenue: 0,
+              createdAt: Date.now(),
+            });
+            addEvent(draft, `מנהל הוסיף ספק חדש: ${payload.name}`);
+          } else if (type === 'driver') {
+            draft.users.unshift({
+              id: createId('driver'),
+              name: payload.name,
+              email: payload.email,
+              role: 'driver',
+              verified: true,
+              blocked: false,
+              spend: 0,
+              createdAt: Date.now(),
+            });
+            addEvent(draft, `מנהל הוסיף לקוח: ${payload.name}`);
+          } else if (type === 'station') {
+            const host = draft.users.find((user) => user.id === payload.hostId);
+            const serviceCategory = payload.serviceCategory || 'charging';
+            const isSos = serviceCategory !== 'charging';
+            draft.stations.unshift({
+              id: createId('station'),
+              hostId: payload.hostId,
+              name: payload.name,
+              address: payload.address,
+              lat: payload.lat != null ? Number(payload.lat) : 32.08,
+              lng: payload.lng != null ? Number(payload.lng) : 34.78,
+              distance: Number(payload.distance || 1),
+              power: isSos ? 0 : Number(payload.power || 11),
+              plug: isSos ? '—' : payload.plug || 'Type 2',
+              pricePerKwh: isSos ? 0 : Number(payload.pricePerKwh || 1.25),
+              available: true,
+              rating: 5,
+              photos: 0,
+              termsText: payload.termsText || (isSos ? 'שירות חירום · נוסף על ידי מנהל' : ''),
+              serviceCategory,
+              createdAt: Date.now(),
+            });
+            addEvent(draft, `מנהל הוסיף ${isSos ? 'נקודת SOS' : 'עמדה חדשה'}${host ? ` עבור ${host.name}` : ''}`);
+          }
+        });
+        return { ok: true };
+      },
+      deleteAdminEntity: async (type, id, extraId) => {
         const portal = SHARECHARGE_ROLE_KEYS.system;
         const apiMap = {
           user: sharechargeApi.deleteUser,
           station: sharechargeApi.deleteStation,
           booking: sharechargeApi.deleteBooking,
           tender: sharechargeApi.deleteTender,
+          bid: (p, bidId, requestId) => sharechargeApi.deleteAdminBid(p, requestId, bidId),
           dispute: sharechargeApi.deleteDispute,
           payment: sharechargeApi.deletePayment,
         };
         if (useApi) {
           const fn = apiMap[type];
           if (!fn) throw new Error('Unknown entity type');
-          const data = await fn(portal, id);
+          const data = type === 'bid' ? await fn(portal, id, extraId) : await fn(portal, id);
           if (data?.state) setState(data.state);
           else await refreshFromApi(portal);
           return data;
@@ -242,6 +342,9 @@ export function ShareChargeProvider({ children }) {
             draft.serviceBids = (draft.serviceBids || []).filter((b) => b.requestId !== id);
             draft.serviceRequests = (draft.serviceRequests || []).filter((r) => r.id !== id);
             addEvent(draft, 'נמחקה קריאת חירום', 'system');
+          } else if (type === 'bid') {
+            draft.serviceBids = (draft.serviceBids || []).filter((b) => b.id !== id);
+            addEvent(draft, 'נמחקה הצעת מחיר', 'system');
           } else if (type === 'dispute') {
             draft.disputes = (draft.disputes || []).filter((d) => d.id !== id);
           } else if (type === 'payment') {

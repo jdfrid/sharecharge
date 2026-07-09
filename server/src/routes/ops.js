@@ -9,6 +9,14 @@ import {
   deleteTenderMem,
   deleteUserMem,
   resetTestingDataMem,
+  updateUserMem,
+  updateStationMem,
+  updateBookingMem,
+  updateTenderMem,
+  updateBidMem,
+  deleteBidMem,
+  updateDisputeMem,
+  updatePaymentMem,
 } from '../devDataStore.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 import {
@@ -21,6 +29,16 @@ import {
   deleteUserDb,
   resetTestingDataDb,
 } from '../services/adminDeleteService.js';
+import {
+  deleteBidDb,
+  updateBidDb,
+  updateBookingDb,
+  updateDisputeDb,
+  updatePaymentDb,
+  updateStationDb,
+  updateTenderDb,
+  updateUserDb,
+} from '../services/adminCrudService.js';
 import { addEvent, loadFullState } from '../services/stateService.js';
 import { geocodeAddressIsrael, isDefaultTelAvivCoords } from '../services/geocodeService.js';
 import { createId, rowToStation, rowToUser } from '../utils.js';
@@ -53,6 +71,26 @@ async function runDelete(req, res, dbFn, memFn, eventLabel) {
     console.error(err);
     return res.status(500).json({ error: 'Delete failed', detail: err.message });
   }
+}
+
+async function runUpdate(req, res, dbFn, memFn, eventLabel, body = req.body) {
+  try {
+    const result = dbReady(req) ? await dbFn(req.params.id, body) : memFn(req.params.id, body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+    }
+    if (eventLabel) await addEvent(eventLabel(result), 'system', dbReady(req));
+    const state = await loadFullState(dbReady(req));
+    return res.json({ ok: true, state });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Update failed', detail: err.message });
+  }
+}
+
+async function respondWithState(res, dbReadyFlag) {
+  const state = await loadFullState(dbReadyFlag);
+  return res.json({ ok: true, state });
 }
 
 router.get('/state', authRequired, async (req, res) => {
@@ -202,11 +240,63 @@ router.patch('/settings/commission', authRequired, requireRole('admin'), async (
     if (Number.isNaN(commission)) return res.status(400).json({ error: 'Invalid commission' });
     await query('UPDATE settings SET commission = $1 WHERE id = 1', [commission]);
     await addEvent(`עמלת המיזם עודכנה ל-${commission}%`);
-    res.json({ ok: true, commission });
+    return respondWithState(res, dbReady(req));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Update failed' });
   }
+});
+
+router.patch('/users/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runUpdate(req, res, updateUserDb, updateUserMem, (r) => `מוקד עדכן משתמש: ${r.name}`);
+});
+
+router.patch('/stations/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runUpdate(req, res, updateStationDb, updateStationMem, (r) => `מוקד עדכן עמדה: ${r.name}`);
+});
+
+router.patch('/bookings/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runUpdate(req, res, updateBookingDb, updateBookingMem, () => 'מוקד עדכן הזמנה');
+});
+
+router.patch('/tenders/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runUpdate(req, res, updateTenderDb, updateTenderMem, (r) => `מוקד עדכן קריאת חירום (${r.category})`);
+});
+
+router.patch('/tenders/:requestId/bids/:bidId', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const { requestId, bidId } = req.params;
+    const result = dbReady(req)
+      ? await updateBidDb(requestId, bidId, req.body || {})
+      : updateBidMem(requestId, bidId, req.body || {});
+    if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+    await addEvent('מוקד עדכן הצעת מחיר', 'system', dbReady(req));
+    return respondWithState(res, dbReady(req));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Update bid failed', detail: err.message });
+  }
+});
+
+router.delete('/tenders/:requestId/bids/:bidId', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const { requestId, bidId } = req.params;
+    const result = dbReady(req) ? await deleteBidDb(requestId, bidId) : deleteBidMem(requestId, bidId);
+    if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+    await addEvent('מוקד מחק הצעת מחיר', 'system', dbReady(req));
+    return respondWithState(res, dbReady(req));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Delete bid failed', detail: err.message });
+  }
+});
+
+router.patch('/disputes/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runUpdate(req, res, updateDisputeDb, updateDisputeMem, () => 'מוקד עדכן מחלוקת');
+});
+
+router.patch('/payments/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runUpdate(req, res, updatePaymentDb, updatePaymentMem, () => 'מוקד עדכן תשלום');
 });
 
 router.delete('/users/:id', authRequired, requireRole('admin'), async (req, res) => {

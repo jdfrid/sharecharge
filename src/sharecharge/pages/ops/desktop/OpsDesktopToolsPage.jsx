@@ -1,14 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import { useShareCharge } from '../../../context/ShareChargeContext';
 import { shortTime } from '../../../utils';
-import { AdminTable, ConfirmDeleteButton, PageHeader } from './OpsAdminUi';
+import { AdminTable, PageHeader, RowActions } from './OpsAdminUi';
+import { OpsCrudModal } from './OpsCrudModal';
+import {
+  buildUserOptions,
+  disputeEditSchema,
+  paymentEditSchema,
+  serializeFormValues,
+} from './opsCrudSchemas';
 
 export function OpsDesktopToolsPage() {
-  const { state, resetTestingData, clearEvents, reset, refreshFromApi, deleteAdminEntity } = useShareCharge();
+  const { state, resetTestingData, clearEvents, reset, refreshFromApi, deleteAdminEntity, updateAdminEntity } =
+    useShareCharge();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [modal, setModal] = useState(null);
+  const userOptions = useMemo(() => buildUserOptions(state.users), [state.users]);
 
   const run = async (key, fn, successText) => {
     setBusy(key);
@@ -40,6 +50,15 @@ export function OpsDesktopToolsPage() {
     } catch (err) {
       setError(err?.message || 'מחיקה נכשלה');
     }
+  };
+
+  const openEdit = (config) => setModal(config);
+  const closeModal = () => setModal(null);
+
+  const saveEdit = async (patch) => {
+    if (!modal?.entityType || !modal?.row) return;
+    await updateAdminEntity(modal.entityType, modal.row.id, patch);
+    closeModal();
   };
 
   return (
@@ -127,7 +146,19 @@ export function OpsDesktopToolsPage() {
               key: 'actions',
               label: 'פעולות',
               render: (row) => (
-                <ConfirmDeleteButton confirmText="למחוק מחלוקת?" onConfirm={() => removeDispute(row)} />
+                <RowActions
+                  onEdit={() =>
+                    openEdit({
+                      title: `עריכת מחלוקת ${row.id.slice(0, 8)}`,
+                      entityType: 'dispute',
+                      row,
+                      schema: disputeEditSchema(),
+                      initialValues: serializeFormValues(disputeEditSchema(), row),
+                    })
+                  }
+                  onDelete={() => removeDispute(row)}
+                  deleteConfirm="למחוק מחלוקת?"
+                />
               ),
             },
           ]}
@@ -149,7 +180,19 @@ export function OpsDesktopToolsPage() {
               key: 'actions',
               label: 'פעולות',
               render: (row) => (
-                <ConfirmDeleteButton confirmText="למחוק תשלום?" onConfirm={() => removePayment(row)} />
+                <RowActions
+                  onEdit={() =>
+                    openEdit({
+                      title: `עריכת תשלום ${row.id.slice(0, 8)}`,
+                      entityType: 'payment',
+                      row,
+                      schema: paymentEditSchema(userOptions),
+                      initialValues: serializeFormValues(paymentEditSchema(userOptions), row),
+                    })
+                  }
+                  onDelete={() => removePayment(row)}
+                  deleteConfirm="למחוק תשלום?"
+                />
               ),
             },
           ]}
@@ -170,6 +213,17 @@ export function OpsDesktopToolsPage() {
           emptyText="אין אירועים"
         />
       </div>
+
+      {modal ? (
+        <OpsCrudModal
+          open
+          title={modal.title}
+          schema={modal.schema}
+          initialValues={modal.initialValues}
+          onClose={closeModal}
+          onSave={saveEdit}
+        />
+      ) : null}
     </>
   );
 }
