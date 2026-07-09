@@ -1181,7 +1181,7 @@ export function updateStationMem(stationId, patch) {
   return { ok: true, name: station.name };
 }
 
-export function updateBookingMem(bookingId, patch) {
+export function patchBookingMem(bookingId, patch) {
   if (!initialized) initMemDataStore();
   const booking = bookings.find((b) => b.id === bookingId);
   if (!booking) return { error: 'not_found', status: 404 };

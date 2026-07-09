@@ -11,7 +11,7 @@ import {
   resetTestingDataMem,
   updateUserMem,
   updateStationMem,
-  updateBookingMem,
+  patchBookingMem,
   updateTenderMem,
   updateBidMem,
   deleteBidMem,
@@ -256,7 +256,7 @@ router.patch('/stations/:id', authRequired, requireRole('admin'), async (req, re
 });
 
 router.patch('/bookings/:id', authRequired, requireRole('admin'), async (req, res) => {
-  await runUpdate(req, res, updateBookingDb, updateBookingMem, () => 'מוקד עדכן הזמנה');
+  await runUpdate(req, res, updateBookingDb, patchBookingMem, () => 'מוקד עדכן הזמנה');
 });
 
 router.patch('/tenders/:id', authRequired, requireRole('admin'), async (req, res) => {
