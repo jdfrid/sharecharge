@@ -47,6 +47,15 @@ import { ProviderPaymentsPage } from './sharecharge/pages/provider/ProviderPayme
 import { ProviderTendersPage } from './sharecharge/pages/provider/ProviderTendersPage';
 import { OpsDashboardPage } from './sharecharge/pages/ops/OpsDashboardPage';
 import { OpsPaymentsPage } from './sharecharge/pages/ops/OpsPaymentsPage';
+import { OpsDesktopLayout } from './sharecharge/pages/ops/desktop/OpsDesktopLayout';
+import { OpsDesktopOverviewPage } from './sharecharge/pages/ops/desktop/OpsDesktopOverviewPage';
+import {
+  OpsDesktopBookingsPage,
+  OpsDesktopStationsPage,
+  OpsDesktopTendersPage,
+  OpsDesktopUsersPage,
+} from './sharecharge/pages/ops/desktop/OpsDesktopDataPages';
+import { OpsDesktopToolsPage } from './sharecharge/pages/ops/desktop/OpsDesktopToolsPage';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -129,6 +138,14 @@ function shareChargeRouteElements() {
         <>
           <Route path="/ops/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.system} />} />
           <Route element={<OpsGate />}>
+            <Route element={<OpsDesktopLayout />}>
+              <Route path="/ops/console" element={<OpsDesktopOverviewPage />} />
+              <Route path="/ops/console/users" element={<OpsDesktopUsersPage />} />
+              <Route path="/ops/console/stations" element={<OpsDesktopStationsPage />} />
+              <Route path="/ops/console/bookings" element={<OpsDesktopBookingsPage />} />
+              <Route path="/ops/console/tenders" element={<OpsDesktopTendersPage />} />
+              <Route path="/ops/console/tools" element={<OpsDesktopToolsPage />} />
+            </Route>
             <Route element={<OpsShell />}>
               <Route path="/ops" element={<Navigate to="/ops/dashboard" replace />} />
               <Route path="/ops/dashboard" element={<OpsDashboardPage />} />

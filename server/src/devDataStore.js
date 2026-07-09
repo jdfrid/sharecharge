@@ -677,14 +677,51 @@ export function listOpenTendersMem(jwtUser) {
   return { requests: open };
 }
 
-export function submitBidMem(jwtUser, requestId, payload) {
+export function listHostCounterBidsMem(jwtUser) {
   if (!initialized) initMemDataStore();
   if (jwtUser.role !== 'host') return { error: 'forbidden', status: 403 };
+  const openIds = new Set(serviceRequests.filter((row) => row.status === 'open').map((row) => row.id));
+  const bids = serviceBids
+    .filter(
+      (row) =>
+        row.host_id === jwtUser.sub
+        && row.status === 'pending'
+        && row.driver_counter_at
+        && openIds.has(row.request_id),
+    )
+    .map(rowToServiceBid);
+  return { bids };
+}
+
+export function submitBidMem(jwtUser, requestId, payload) {
+  if (!initialized) initMemDataStore();
+  if (jwtUser.role !== 'host') return { error: 'forbidden', status: 403, detail: 'נדרש חשבון ספק' };
   const request = serviceRequests.find((row) => row.id === requestId);
-  if (!request || request.status !== 'open') return { error: 'not_found', status: 404 };
+  if (!request || request.status !== 'open') {
+    return { error: 'not_found', status: 404, detail: 'הקריאה נסגרה או אינה זמינה להצעות' };
+  }
 
   const lineItems = payload?.lineItems || [];
   const total = Number(payload?.total ?? lineItems.reduce((s, l) => s + Number(l.amount || 0), 0));
+  if (!Number.isFinite(total) || total <= 0) {
+    return { error: 'invalid', status: 400, detail: 'יש להזין מחיר גדול מאפס' };
+  }
+
+  const existing = serviceBids.find(
+    (row) => row.request_id === requestId && row.host_id === jwtUser.sub && row.status === 'pending',
+  );
+  if (existing) {
+    existing.line_items = lineItems;
+    existing.total = total;
+    existing.eta_minutes = Number(payload?.etaMinutes || 15);
+    existing.driver_counter_total = null;
+    existing.driver_counter_eta_minutes = null;
+    existing.driver_counter_message = null;
+    existing.driver_counter_at = null;
+    addEventMem('ספק עדכן הצעת מחיר לקריאת חירום', 'activity');
+    return { bid: rowToServiceBid(existing), updated: true };
+  }
+
   const bid = {
     id: createId('bid'),
     request_id: requestId,
@@ -1011,4 +1048,90 @@ export function executePaymentMem(paymentId, payerId, { cardSplits, cardNumber, 
   payment.paidAt = Date.now();
   addEventMem(`תשלום ₪${payment.amount} בוצע · Tranzila`, 'activity');
   return { ok: true, payment: rowToPayment(memPaymentRow(payment)) };
+}
+
+function deleteBookingsMemByIds(ids) {
+  const set = new Set(ids);
+  if (!set.size) return;
+  transactions = transactions.filter((tx) => !set.has(tx.booking_id));
+  disputes = disputes.filter((d) => !set.has(d.booking_id));
+  bookings = bookings.filter((b) => !set.has(b.id));
+}
+
+export function deleteUserMem(userId) {
+  if (!initialized) initMemDataStore();
+  const user = findUserById(userId);
+  if (!user) return { error: 'not_found', status: 404 };
+  if (user.role === 'admin') return { error: 'forbidden', detail: 'לא ניתן למחוק מנהל מערכת', status: 403 };
+
+  const bookingIds = bookings.filter((b) => b.driver_id === userId || b.host_id === userId).map((b) => b.id);
+  deleteBookingsMemByIds(bookingIds);
+  const tenderIds = serviceRequests.filter((r) => r.driver_id === userId).map((r) => r.id);
+  serviceRequests = serviceRequests.filter((r) => r.driver_id !== userId);
+  serviceBids = serviceBids.filter((b) => !tenderIds.includes(b.request_id));
+  payments = payments.filter((p) => p.payer_id !== userId && p.host_id !== userId);
+  paymentMethods = paymentMethods.filter((m) => m.user_id !== userId);
+  const stationIds = stations.filter((s) => s.host_id === userId).map((s) => s.id);
+  for (const sid of stationIds) deleteStationMem(sid);
+  users = users.filter((u) => u.id !== userId);
+  return { ok: true, name: user.name };
+}
+
+export function deleteStationMem(stationId) {
+  if (!initialized) initMemDataStore();
+  const station = stations.find((s) => s.id === stationId);
+  if (!station) return { error: 'not_found', status: 404 };
+  const bookingIds = bookings.filter((b) => b.station_id === stationId).map((b) => b.id);
+  deleteBookingsMemByIds(bookingIds);
+  stations = stations.filter((s) => s.id !== stationId);
+  return { ok: true, name: station.name };
+}
+
+export function deleteBookingMem(bookingId) {
+  if (!initialized) initMemDataStore();
+  if (!bookings.some((b) => b.id === bookingId)) return { error: 'not_found', status: 404 };
+  deleteBookingsMemByIds([bookingId]);
+  return { ok: true };
+}
+
+export function deleteTenderMem(tenderId) {
+  if (!initialized) initMemDataStore();
+  const tender = serviceRequests.find((r) => r.id === tenderId);
+  if (!tender) return { error: 'not_found', status: 404 };
+  serviceRequests = serviceRequests.filter((r) => r.id !== tenderId);
+  serviceBids = serviceBids.filter((b) => b.request_id !== tenderId);
+  return { ok: true, category: tender.category };
+}
+
+export function deleteDisputeMem(disputeId) {
+  if (!initialized) initMemDataStore();
+  if (!disputes.some((d) => d.id === disputeId)) return { error: 'not_found', status: 404 };
+  disputes = disputes.filter((d) => d.id !== disputeId);
+  return { ok: true };
+}
+
+export function deletePaymentMem(paymentId) {
+  if (!initialized) initMemDataStore();
+  if (!payments.some((p) => p.id === paymentId)) return { error: 'not_found', status: 404 };
+  payments = payments.filter((p) => p.id !== paymentId);
+  return { ok: true };
+}
+
+export function clearAuditEventsMem() {
+  if (!initialized) initMemDataStore();
+  events = [];
+  return { ok: true };
+}
+
+export function resetTestingDataMem() {
+  if (!initialized) initMemDataStore();
+  bookings = [];
+  transactions = [];
+  disputes = [];
+  serviceRequests = [];
+  serviceBids = [];
+  payments = [];
+  paymentMethods = [];
+  events = [];
+  return { ok: true };
 }

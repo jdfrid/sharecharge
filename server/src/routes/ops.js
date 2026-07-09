@@ -1,6 +1,26 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
+import {
+  clearAuditEventsMem,
+  deleteBookingMem,
+  deleteDisputeMem,
+  deletePaymentMem,
+  deleteStationMem,
+  deleteTenderMem,
+  deleteUserMem,
+  resetTestingDataMem,
+} from '../devDataStore.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
+import {
+  clearAuditEventsDb,
+  deleteBookingDb,
+  deleteDisputeDb,
+  deletePaymentDb,
+  deleteStationDb,
+  deleteTenderDb,
+  deleteUserDb,
+  resetTestingDataDb,
+} from '../services/adminDeleteService.js';
 import { addEvent, loadFullState } from '../services/stateService.js';
 import { geocodeAddressIsrael, isDefaultTelAvivCoords } from '../services/geocodeService.js';
 import { createId, rowToStation, rowToUser } from '../utils.js';
@@ -15,6 +35,25 @@ function normalizeStationCategory(raw) {
 }
 
 const router = Router();
+
+function dbReady(req) {
+  return !!req.app.locals.dbReady;
+}
+
+async function runDelete(req, res, dbFn, memFn, eventLabel) {
+  try {
+    const result = dbReady(req) ? await dbFn(req.params.id) : memFn(req.params.id);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+    }
+    if (eventLabel) await addEvent(eventLabel(result), 'system', dbReady(req));
+    const state = await loadFullState(dbReady(req));
+    return res.json({ ok: true, state });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Delete failed', detail: err.message });
+  }
+}
 
 router.get('/state', authRequired, async (req, res) => {
   try {
@@ -167,6 +206,54 @@ router.patch('/settings/commission', authRequired, requireRole('admin'), async (
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+router.delete('/users/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runDelete(req, res, deleteUserDb, deleteUserMem, (r) => `מנהל מחק משתמש: ${r.name}`);
+});
+
+router.delete('/stations/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runDelete(req, res, deleteStationDb, deleteStationMem, (r) => `מנהל מחק עמדה: ${r.name}`);
+});
+
+router.delete('/bookings/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runDelete(req, res, deleteBookingDb, deleteBookingMem, () => 'מנהל מחק הזמנה');
+});
+
+router.delete('/tenders/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runDelete(req, res, deleteTenderDb, deleteTenderMem, (r) => `מנהל מחק קריאת חירום (${r.category})`);
+});
+
+router.delete('/disputes/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runDelete(req, res, deleteDisputeDb, deleteDisputeMem, () => 'מנהל מחק מחלוקת');
+});
+
+router.delete('/payments/:id', authRequired, requireRole('admin'), async (req, res) => {
+  await runDelete(req, res, deletePaymentDb, deletePaymentMem, () => 'מנהל מחק תשלום');
+});
+
+router.delete('/events', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    if (dbReady(req)) await clearAuditEventsDb();
+    else clearAuditEventsMem();
+    await addEvent('מנהל ניקה יומן פעילות', 'system', dbReady(req));
+    res.json({ ok: true, state: await loadFullState(dbReady(req)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Clear events failed' });
+  }
+});
+
+router.post('/reset-testing', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    if (dbReady(req)) await resetTestingDataDb();
+    else resetTestingDataMem();
+    await addEvent('מנהל איפס נתוני בדיקות (הזמנות · SOS · תשלומים)', 'system', dbReady(req));
+    res.json({ ok: true, state: await loadFullState(dbReady(req)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Reset testing data failed' });
   }
 });
 

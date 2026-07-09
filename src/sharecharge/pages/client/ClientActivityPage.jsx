@@ -10,6 +10,7 @@ import {
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { getPreferredRepositoryMode } from '../../data/apiRepository.stub';
 import { useBookingLocationWatch } from '../../hooks/useBookingLocationWatch';
+import { useClientActiveTender } from '../../hooks/useClientActiveTender';
 import { resolveDriverIdForSession } from '../../auth/identity';
 import { currency } from '../../utils';
 import { Card } from '../../components/ui/Card';
@@ -23,9 +24,14 @@ export function ClientActivityPage() {
   const driverBookings = state.bookings.filter((item) => item.driverId === myDriverId);
   const activeBooking = driverBookings.find((item) => !['completed', 'rejected', 'cancelled'].includes(item.status));
   const completedBookings = driverBookings.filter((item) => item.status === 'completed');
-  const activeTender = (state.serviceRequests || []).find(
-    (item) => item.driverId === myDriverId && !['completed', 'cancelled'].includes(item.status),
-  );
+  const activeTenderFromHook = useClientActiveTender();
+  const activeTender =
+    activeTenderFromHook.tender ||
+    (state.serviceRequests || []).find(
+      (item) => item.driverId === myDriverId && !['completed', 'cancelled'].includes(item.status),
+    );
+  const tenderBidCount = activeTenderFromHook.bidCount;
+  const tenderOffersPath = activeTenderFromHook.offersPath;
   const stationFor = (booking) => state.stations.find((station) => station.id === booking.stationId);
   const activeStation = activeBooking ? stationFor(activeBooking) : null;
   const apiMode = getPreferredRepositoryMode() === 'api';
@@ -168,11 +174,18 @@ export function ClientActivityPage() {
         <Card className="border-amber-200/60 bg-amber-50/40">
           <p className="text-sm font-black text-amber-900">קריאת חירום פעילה</p>
           <p className="mt-1 text-xs font-bold text-sc-muted">{activeTender.addressText}</p>
+          {tenderBidCount > 0 ? (
+            <p className="mt-2 text-sm font-black text-[var(--sc-accent)]">
+              {tenderBidCount} הצעות מחיר ממתינות
+            </p>
+          ) : (
+            <p className="mt-2 text-xs font-bold text-amber-800">ממתין להצעות מספקים…</p>
+          )}
           <Link
-            to={activeTender.status === 'open' ? `/client/tender/${activeTender.id}/offers` : `/client/track/${activeTender.id}`}
+            to={tenderOffersPath || `/client/tender/${activeTender.id}/offers`}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-sc-md bg-amber-600 py-3 text-sm font-black text-white"
           >
-            המשך מעקב
+            {tenderBidCount > 0 ? 'צפייה בהצעות' : 'המשך מעקב'}
             <ChevronLeft size={18} />
           </Link>
         </Card>

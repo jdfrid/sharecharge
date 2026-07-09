@@ -134,7 +134,7 @@ export function formatShareChargeApiError(err, action = 'request') {
     }
     return `לא ניתן להגיע לשרver (${target}). ודאו: 1) הטלפון והמחשב על אותו Wi‑Fi 2) npm run start:api פועל 3) חומת אש מאפשרת פורט 3001.`;
   }
-  return err?.message || err?.data?.detail || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : action === 'booking' ? 'שליחת ההזמנה נכשלה' : 'הבקשה נכשלה');
+  return err?.message || err?.data?.detail || (action === 'otp' ? 'שליחת קוד נכשלה' : action === 'verify' ? 'אימות נכשל' : action === 'booking' ? 'שליחת ההזמנה נכשלה' : action === 'bid' ? 'שליחת הצעת מחיר נכשלה' : 'הבקשה נכשלה');
 }
 
 /** Wake Render / verify connectivity before OTP. */
@@ -259,11 +259,17 @@ export async function apiRequest(path, { method = 'GET', body, portal, token } =
     const detail = data?.detail || data?.error;
     let message = detail || res.statusText || 'Request failed';
     if (res.status === 404 && path.includes('/tenders')) {
-      message = 'שירות חירום לא deployed בשרver — Render Dashboard → Manual Deploy (Dockerfile).';
+      message = detail || 'שירות חירום לא deployed בשרver — Render Dashboard → Manual Deploy (Dockerfile).';
+    } else if (res.status === 404 && path.includes('/bids')) {
+      message = detail || 'הקריאה נסגרה או אינה זמינה להצעות';
     } else if (res.status === 404 && path.includes('/geo/')) {
       message = 'שירות כתובות לא deployed — Render Dashboard → Manual Deploy (Dockerfile).';
     } else if (res.status === 401 || res.status === 403) {
-      message = detail || 'נדרש OTP — התחברו מחדש';
+      message =
+        detail
+        || (path.includes('/bids') && res.status === 403
+          ? 'אין הרשאה — התחברו כספק עם אותו מייל שנרשם לנקודת SOS'
+          : 'נדרש OTP — התחברו מחדש');
       if (portal && res.status === 401 && !path.startsWith('/auth/')) {
         clearAuthSession(portal);
       }
@@ -321,11 +327,20 @@ export const sharechargeApi = {
   addDriver: (portal, userData) => apiRequest('/ops/users/driver', { method: 'POST', body: userData, portal }),
   addStation: (portal, stationData) => apiRequest('/ops/stations', { method: 'POST', body: stationData, portal }),
   reset: (portal) => apiRequest('/ops/reset', { method: 'POST', portal }),
+  resetTestingData: (portal) => apiRequest('/ops/reset-testing', { method: 'POST', portal }),
+  deleteUser: (portal, id) => apiRequest(`/ops/users/${id}`, { method: 'DELETE', portal }),
+  deleteStation: (portal, id) => apiRequest(`/ops/stations/${id}`, { method: 'DELETE', portal }),
+  deleteBooking: (portal, id) => apiRequest(`/ops/bookings/${id}`, { method: 'DELETE', portal }),
+  deleteTender: (portal, id) => apiRequest(`/ops/tenders/${id}`, { method: 'DELETE', portal }),
+  deleteDispute: (portal, id) => apiRequest(`/ops/disputes/${id}`, { method: 'DELETE', portal }),
+  deletePayment: (portal, id) => apiRequest(`/ops/payments/${id}`, { method: 'DELETE', portal }),
+  clearEvents: (portal) => apiRequest('/ops/events', { method: 'DELETE', portal }),
   reportBookingLocation: (portal, id, coords) =>
     apiRequest(`/bookings/${id}/location`, { method: 'POST', body: coords, portal }),
   createTender: (portal, payload) => apiRequest('/tenders', { method: 'POST', body: payload, portal }),
   fetchTenderBids: (portal, id) => apiRequest(`/tenders/${id}/bids`, { portal }),
   fetchOpenTenders: (portal) => apiRequest('/tenders/open', { portal }),
+  fetchHostCounterBids: (portal) => apiRequest('/tenders/my/counter-bids', { portal }),
   submitTenderBid: (portal, id, payload) =>
     apiRequest(`/tenders/${id}/bids`, { method: 'POST', body: payload, portal }),
   acceptTenderBid: (portal, requestId, bidId) =>

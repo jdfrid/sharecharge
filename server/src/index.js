@@ -50,12 +50,13 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
-app.get('/', (_req, res) => {
+app.get('/api', (_req, res) => {
   res.json({
     ok: true,
     service: 'sharecharge-api',
     health: '/api/health',
-    api: '/api/sharecharge',
+    sharecharge: '/api/sharecharge',
+    spa: hasPublic,
   });
 });
 
@@ -65,6 +66,8 @@ app.get('/api/health', async (_req, res) => {
     service: 'sharecharge-api',
     port: PORT,
     db: app.locals.dbReady,
+    spa: hasPublic,
+    publicDir: hasPublic ? publicDir : null,
   };
 
   if (!process.env.DATABASE_URL) {
@@ -140,9 +143,31 @@ app.use('/api', (req, res) => {
 });
 
 if (hasPublic) {
-  app.use(express.static(publicDir, { index: false }));
+  app.use(
+    express.static(publicDir, {
+      index: 'index.html',
+      maxAge: '1h',
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }),
+  );
   app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(publicDir, 'index.html'));
+  });
+} else {
+  app.get('/', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      ok: true,
+      service: 'sharecharge-api',
+      health: '/api/health',
+      api: '/api/sharecharge',
+      hint: 'Frontend not bundled — run: npm run build:deploy',
+    });
   });
 }
 
@@ -220,6 +245,7 @@ async function boot() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`ShareCharge API listening on http://0.0.0.0:${PORT} (dbReady=${app.locals.dbReady})`);
+    console.log(`SPA frontend: ${hasPublic ? 'enabled (index.html at /)' : 'MISSING — only JSON API at /'}`);
   });
 }
 

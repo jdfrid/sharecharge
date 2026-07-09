@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export const HOME_MENU_BUILD = '1.0.29';
+export const HOME_MENU_BUILD = '1.0.38';
 
 const icon = (file) => `${import.meta.env.BASE_URL}images/service-icons/${file}`;
 

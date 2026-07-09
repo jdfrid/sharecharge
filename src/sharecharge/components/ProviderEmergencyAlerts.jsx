@@ -1,9 +1,8 @@
-import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { Card } from './ui/Card';
 import { currency } from '../utils';
 
-export function ProviderEmergencyAlerts({ alerts = [], onDismiss }) {
+export function ProviderEmergencyAlerts({ alerts = [], onDismiss, onOpenBid }) {
   if (!alerts.length) return null;
 
   return (
@@ -54,12 +53,15 @@ export function ProviderEmergencyAlerts({ alerts = [], onDismiss }) {
                   {alert.radiusKm ? ` · רדיוס ${alert.radiusKm} ק״מ` : ''}
                 </p>
               ) : null}
-              <Link
-                to="/provider/tenders"
-                className="mt-2 inline-block text-xs font-black text-[var(--sc-accent)] underline"
-              >
-                {alert.kind === 'pending_confirm' ? 'אשר/דחה במכרזים' : 'הגש הצעת מחיר'}
-              </Link>
+              <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenBid?.(alert.requestId, alert.kind)}
+                  className="min-h-[44px] touch-manipulation rounded-sc-sm bg-[var(--sc-accent)] px-4 py-2.5 text-sm font-black text-white shadow-sm"
+                >
+                  {alert.kind === 'pending_confirm' ? 'אשר / דחה' : 'הגש הצעת מחיר'}
+                </button>
+              </div>
             </div>
             <button
               type="button"

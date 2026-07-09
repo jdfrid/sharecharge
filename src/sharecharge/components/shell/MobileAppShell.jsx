@@ -126,7 +126,7 @@ export function MobileAppShell({
           </div>
         </header>
 
-        <main className="relative z-[5] -mt-4 space-y-4 px-4 pt-0 pb-2">{children}</main>
+        <main className="relative z-10 isolate space-y-4 px-4 pb-2 pt-1 pointer-events-auto">{children}</main>
 
         {hasDock && (
           <nav className="bottom-dock fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md items-end justify-around gap-1 rounded-t-[1.75rem] px-3 pb-[calc(0.65rem+env(safe-area-inset-bottom,0px))] pt-3">

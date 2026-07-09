@@ -13,4 +13,5 @@ export const SHARECHARGE_DEEP_LINKS = {
   providerApp: '/provider/dashboard',
   opsEntry: '/ops/entry',
   opsApp: '/ops/dashboard',
+  opsConsole: '/ops/console',
 };

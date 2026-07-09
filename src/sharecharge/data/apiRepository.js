@@ -19,7 +19,12 @@ export function portalForContext() {
 }
 
 export async function loadStateFromApi(portal) {
-  return sharechargeApi.fetchState(portal);
+  const state = await sharechargeApi.fetchState(portal);
+  return {
+    ...state,
+    serviceRequests: state.serviceRequests ?? [],
+    serviceBids: state.serviceBids ?? [],
+  };
 }
 
 export async function refreshAfter(portal, fn) {

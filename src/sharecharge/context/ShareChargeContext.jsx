@@ -11,7 +11,7 @@ import { buildDefaultSplits } from '../utils/paymentUtils';
 import { findActiveBookingForStation } from '../utils/stationAvailability';
 import { clearAuthSession, loadAuthSessions } from '../auth/session';
 import { resolveApiPortal } from '../auth/portal';
-import { ensureDriverUserForEmail } from '../auth/identity';
+import { ensureDriverUserForEmail, resolveHostIdForSession } from '../auth/identity';
 
 const ShareChargeContext = createContext(null);
 
@@ -125,6 +125,24 @@ export function ShareChargeProvider({ children }) {
     await refreshFromApi(portal);
   };
 
+  const syncTenderSnapshot = useCallback(({ request, bids } = {}) => {
+    if (!request?.id && !(bids?.length)) return;
+    update((draft) => {
+      if (!draft.serviceRequests) draft.serviceRequests = [];
+      if (!draft.serviceBids) draft.serviceBids = [];
+      if (request?.id) {
+        const requestIdx = draft.serviceRequests.findIndex((item) => item.id === request.id);
+        if (requestIdx >= 0) draft.serviceRequests[requestIdx] = request;
+        else draft.serviceRequests.unshift(request);
+      }
+      for (const bid of bids || []) {
+        const bidIdx = draft.serviceBids.findIndex((item) => item.id === bid.id);
+        if (bidIdx >= 0) draft.serviceBids[bidIdx] = bid;
+        else draft.serviceBids.unshift(bid);
+      }
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       repositoryMode,
@@ -140,6 +158,98 @@ export function ShareChargeProvider({ children }) {
           setState(getInitialAppState());
         }
       },
+      resetTestingData: async () => {
+        if (useApi) {
+          const data = await sharechargeApi.resetTestingData(SHARECHARGE_ROLE_KEYS.system);
+          if (data?.state) setState(data.state);
+          else await refreshFromApi(SHARECHARGE_ROLE_KEYS.system);
+          return data;
+        }
+        update((draft) => {
+          draft.bookings = [];
+          draft.transactions = [];
+          draft.disputes = [];
+          draft.serviceRequests = [];
+          draft.serviceBids = [];
+          draft.payments = [];
+          draft.paymentMethods = [];
+          draft.events = [];
+          addEvent(draft, 'איפוס נתוני בדיקות (מקומי)', 'system');
+        });
+        return { ok: true };
+      },
+      clearEvents: async () => {
+        if (useApi) {
+          const data = await sharechargeApi.clearEvents(SHARECHARGE_ROLE_KEYS.system);
+          if (data?.state) setState(data.state);
+          else await refreshFromApi(SHARECHARGE_ROLE_KEYS.system);
+          return data;
+        }
+        update((draft) => {
+          draft.events = [];
+        });
+        return { ok: true };
+      },
+      deleteAdminEntity: async (type, id) => {
+        const portal = SHARECHARGE_ROLE_KEYS.system;
+        const apiMap = {
+          user: sharechargeApi.deleteUser,
+          station: sharechargeApi.deleteStation,
+          booking: sharechargeApi.deleteBooking,
+          tender: sharechargeApi.deleteTender,
+          dispute: sharechargeApi.deleteDispute,
+          payment: sharechargeApi.deletePayment,
+        };
+        if (useApi) {
+          const fn = apiMap[type];
+          if (!fn) throw new Error('Unknown entity type');
+          const data = await fn(portal, id);
+          if (data?.state) setState(data.state);
+          else await refreshFromApi(portal);
+          return data;
+        }
+        update((draft) => {
+          const removeBooking = (bookingId) => {
+            draft.transactions = (draft.transactions || []).filter((tx) => tx.bookingId !== bookingId);
+            draft.disputes = (draft.disputes || []).filter((d) => d.bookingId !== bookingId);
+            draft.bookings = (draft.bookings || []).filter((b) => b.id !== bookingId);
+          };
+          if (type === 'user') {
+            const user = draft.users?.find((u) => u.id === id);
+            if (!user || user.role === 'admin') return;
+            (draft.bookings || []).filter((b) => b.driverId === id || b.hostId === id).forEach((b) => removeBooking(b.id));
+            draft.serviceRequests = (draft.serviceRequests || []).filter((r) => r.driverId !== id);
+            draft.serviceBids = (draft.serviceBids || []).filter((b) =>
+              (draft.serviceRequests || []).some((r) => r.id === b.requestId),
+            );
+            draft.payments = (draft.payments || []).filter((p) => p.payerId !== id && p.hostId !== id);
+            draft.paymentMethods = (draft.paymentMethods || []).filter((m) => m.userId !== id);
+            (draft.stations || []).filter((s) => s.hostId === id).forEach((s) => {
+              (draft.bookings || []).filter((b) => b.stationId === s.id).forEach((b) => removeBooking(b.id));
+            });
+            draft.stations = (draft.stations || []).filter((s) => s.hostId !== id);
+            draft.users = (draft.users || []).filter((u) => u.id !== id);
+            addEvent(draft, `נמחק משתמש: ${user.name}`, 'system');
+          } else if (type === 'station') {
+            const station = draft.stations?.find((s) => s.id === id);
+            (draft.bookings || []).filter((b) => b.stationId === id).forEach((b) => removeBooking(b.id));
+            draft.stations = (draft.stations || []).filter((s) => s.id !== id);
+            if (station) addEvent(draft, `נמחקה עמדה: ${station.name}`, 'system');
+          } else if (type === 'booking') {
+            removeBooking(id);
+            addEvent(draft, 'נמחקה הזמנה', 'system');
+          } else if (type === 'tender') {
+            draft.serviceBids = (draft.serviceBids || []).filter((b) => b.requestId !== id);
+            draft.serviceRequests = (draft.serviceRequests || []).filter((r) => r.id !== id);
+            addEvent(draft, 'נמחקה קריאת חירום', 'system');
+          } else if (type === 'dispute') {
+            draft.disputes = (draft.disputes || []).filter((d) => d.id !== id);
+          } else if (type === 'payment') {
+            draft.payments = (draft.payments || []).filter((p) => p.id !== id);
+          }
+        });
+        return { ok: true };
+      },
       syncSessionProfiles: () => {
         if (useApi) {
           refreshFromApi(apiPortal);
@@ -152,6 +262,7 @@ export function ShareChargeProvider({ children }) {
           }
         });
       },
+      syncTenderSnapshot,
       createBooking: async ({ stationId, startTime, durationHours }) => {
         if (useApi) {
           try {
@@ -581,11 +692,21 @@ export function ShareChargeProvider({ children }) {
         let bid = null;
         update((draft) => {
           if (!draft.serviceBids) draft.serviceBids = [];
-          const session = loadAuthSessions().provider;
+          const hostId = resolveHostIdForSession(draft);
+          const existing = draft.serviceBids.find(
+            (item) => item.requestId === requestId && item.hostId === hostId && item.status === 'pending',
+          );
+          if (existing) {
+            existing.lineItems = payload.lineItems || [];
+            existing.total = Number(payload.total || 0);
+            existing.etaMinutes = Number(payload.etaMinutes || 15);
+            bid = existing;
+            return;
+          }
           bid = {
             id: createId('bid'),
             requestId,
-            hostId: draft.users.find((u) => u.email === session?.email)?.id || 'host-1',
+            hostId,
             lineItems: payload.lineItems || [],
             total: Number(payload.total || 0),
             etaMinutes: Number(payload.etaMinutes || 15),
@@ -754,7 +875,7 @@ export function ShareChargeProvider({ children }) {
         return { mock: true, ready: false, terminal: '', iframeBase: 'https://directng.tranzila.com' };
       },
     }),
-    [state, loading, syncError, refreshFromApi, repositoryMode, useApi, apiPortal],
+    [state, loading, syncError, refreshFromApi, syncTenderSnapshot, repositoryMode, useApi, apiPortal],
   );
 
   return <ShareChargeContext.Provider value={value}>{children}</ShareChargeContext.Provider>;

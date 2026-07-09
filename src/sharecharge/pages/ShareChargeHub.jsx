@@ -16,7 +16,8 @@ export function ShareChargeHub() {
     { label: 'ספק — כניסה', path: SHARECHARGE_DEEP_LINKS.providerEntry },
     { label: 'ספק — אפליקציה', path: SHARECHARGE_DEEP_LINKS.providerApp },
     { label: 'מנהל מערכת — כניסה', path: SHARECHARGE_DEEP_LINKS.opsEntry },
-    { label: 'מנהל מערכת — לוח בקרה', path: SHARECHARGE_DEEP_LINKS.opsApp },
+    { label: 'מנהל מערכת — קונסול (מחשב)', path: SHARECHARGE_DEEP_LINKS.opsConsole },
+    { label: 'מנהל מערכת — לוח בקרה (מובייל)', path: SHARECHARGE_DEEP_LINKS.opsApp },
   ];
 
   return (
@@ -88,7 +89,11 @@ export function ShareChargeHub() {
         </div>
 
         <p className="relative z-10 mt-6 rounded-sc-lg border border-white/80 bg-gradient-to-br from-slate-900 via-blue-950/90 to-slate-900 p-4 text-sm leading-7 text-white/95 shadow-sc-card backdrop-blur-sm">
-          פאנל <span className="font-black text-cyan-300">/admin</span> (מבצעים) נשאר נפרד.
+          <span className="font-black text-cyan-300">קונסול ניהול (מחשב):</span>{' '}
+          <span className="font-mono text-[11px] text-white/80" dir="ltr">
+            {shareChargeHashUrl(SHARECHARGE_DEEP_LINKS.opsConsole)}
+          </span>
+          <span className="mt-2 block text-white/70">OTP מנהל → מחיקה וניקוי נתוני בדיקות</span>
         </p>
       </div>
     </div>

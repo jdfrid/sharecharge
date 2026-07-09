@@ -21,17 +21,23 @@ export function ProviderDashboardPage() {
       <Card>
         <label className="mb-3 block text-sm font-bold text-sc-muted">
           ספק פעיל
-          <select
-            value={activeHost?.id || ''}
-            onChange={(e) => setActiveHostId(e.target.value)}
-            className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black text-sc-text outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
-          >
-            {hosts.map((host) => (
-              <option key={host.id} value={host.id} className="text-sc-text">
-                {host.name}
-              </option>
-            ))}
-          </select>
+          {hosts.length > 1 ? (
+            <select
+              value={activeHost?.id || ''}
+              onChange={(e) => setActiveHostId(e.target.value)}
+              className="mt-2 w-full rounded-sc-sm border border-sc-border bg-white px-3 py-3 font-black text-sc-text outline-none focus:border-[var(--sc-accent-2)] focus:ring-2 focus:ring-[var(--sc-accent-2)]/20"
+            >
+              {hosts.map((host) => (
+                <option key={host.id} value={host.id} className="text-sc-text">
+                  {host.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="mt-2 rounded-sc-sm border border-sc-border bg-sc-surface px-3 py-3 font-black text-sc-text">
+              {activeHost?.name || '—'}
+            </p>
+          )}
         </label>
         <p className="text-sm text-sc-muted">יתרה לפי עסקאות במערכת</p>
         <div className="mt-2 flex items-end justify-between gap-2">

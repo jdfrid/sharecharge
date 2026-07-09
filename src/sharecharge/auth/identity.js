@@ -1,11 +1,27 @@
 import { createId } from '../utils';
 import { loadAuthSessions } from './session';
+import { getAuthToken } from '../data/sharechargeApi';
+import { SHARECHARGE_ROLE_KEYS } from '../constants';
 
 export function normalizeEmail(value) {
   return (value || '').trim().toLowerCase();
 }
 
+function jwtSubForPortal(portal) {
+  const token = getAuthToken(portal);
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}
+
+export { jwtSubForPortal };
+
 export function getSessionClientEmail() {
+
   return normalizeEmail(loadAuthSessions().client?.email);
 }
 
@@ -38,20 +54,23 @@ export function ensureDriverUserForEmail(draft, rawEmail) {
 }
 
 export function resolveDriverIdForSession(state) {
+  const fromJwt = jwtSubForPortal(SHARECHARGE_ROLE_KEYS.client);
+  if (fromJwt) return fromJwt;
   const email = getSessionClientEmail();
-  if (!email) return 'driver-1';
+  if (!email) return state.users.find((u) => u.role === 'driver')?.id || 'driver-1';
   const driver = state.users.find((u) => u.role === 'driver' && normalizeEmail(u.email) === email);
   return driver?.id || 'driver-1';
 }
 
 export function resolveHostIdForSession(state) {
+  const fromJwt = jwtSubForPortal(SHARECHARGE_ROLE_KEYS.provider);
+  if (fromJwt) return fromJwt;
   const email = getSessionProviderEmail();
   if (!email) return state.users.find((u) => u.role === 'host')?.id || '';
   const host = state.users.find((u) => u.role === 'host' && normalizeEmail(u.email) === email);
-  return host?.id || state.users.find((u) => u.role === 'host')?.id || '';
+  return host?.id || '';
 }
 
-export function userDisplay(u) {
-  if (!u) return { name: '—', email: '' };
+export function userDisplay(u) {  if (!u) return { name: '—', email: '' };
   return { name: u.name, email: u.email || '' };
 }

@@ -13,10 +13,14 @@ import {
 import { ClientHomeMenu, HOME_MENU_BUILD } from '../../components/client/ClientHomeMenu';
 import { Card } from '../../components/ui/Card';
 import { StatusPill } from '../../components/ui/StatusPill';
+import { useClientActiveTender } from '../../hooks/useClientActiveTender';
+import { currency } from '../../utils';
 
 export function ClientHomePage() {
   const navigate = useNavigate();
   const { state } = useShareCharge();
+  const { tender: activeTender, bidCount, countersPending, offersPath, categoryLabel, loading: tenderLoading } =
+    useClientActiveTender();
   const [profile, setProfile] = useState(() => loadVehicleProfile());
   const [profileOpen, setProfileOpen] = useState(false);
   const batteryPct = 78;
@@ -52,6 +56,48 @@ export function ClientHomePage() {
         <span className="text-sc-muted">·</span>
         <span className="text-[10px] text-sc-muted">v{HOME_MENU_BUILD}</span>
       </p>
+
+      {activeTender && offersPath ? (
+        <Card className="border-amber-300/50 bg-amber-50/80 ring-2 ring-amber-200/60">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-amber-800">SOS · קריאת חירום פעילה</p>
+              <h3 className="mt-1 text-lg font-black text-sc-text">{categoryLabel}</h3>
+              <p className="mt-1 text-sm font-bold text-sc-muted">{activeTender.addressText || 'מיקום GPS'}</p>
+              {countersPending > 0 ? (
+                <p className="mt-2 text-sm font-black text-violet-800">
+                  ממתין לתגובת ספק על {countersPending} הצעות נגדיות
+                </p>
+              ) : bidCount > 0 ? (
+                <p className="mt-2 text-sm font-black text-[var(--sc-accent)]">
+                  {bidCount} הצעות מחיר ממתינות לבחירה
+                </p>
+              ) : (
+                <p className="mt-2 text-sm font-bold text-amber-800">
+                  {tenderLoading ? 'טוען הצעות…' : 'ממתין להצעות מספקים באזור…'}
+                </p>
+              )}
+              {activeTender.status === 'pending_provider' && activeTender.amount ? (
+                <p className="mt-1 text-xs font-bold text-sc-muted">
+                  נבחר ספק · {currency(activeTender.amount)} · ממתין לאישור
+                </p>
+              ) : null}
+            </div>
+            {bidCount > 0 ? (
+              <span className="flex h-10 min-w-10 items-center justify-center rounded-full bg-[var(--sc-accent)] px-2 text-sm font-black text-white">
+                {bidCount}
+              </span>
+            ) : null}
+          </div>
+          <Link
+            to={offersPath}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-sc-md bg-amber-600 py-3.5 text-sm font-black text-white shadow-sc-card"
+          >
+            {bidCount > 0 ? 'צפייה בהצעות ובחירת ספק' : 'מעקב קריאת חירום'}
+            <ChevronLeft size={18} />
+          </Link>
+        </Card>
+      ) : null}
 
       {activeBooking ? (
         <Card className="border-[var(--sc-accent)]/25 bg-[var(--sc-accent)]/[0.06]">

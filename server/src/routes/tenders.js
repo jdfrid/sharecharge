@@ -7,6 +7,7 @@ import {
   counterBidMem,
   createTenderMem,
   declineBidMem,
+  listHostCounterBidsMem,
   listOpenTendersMem,
   listTenderBidsMem,
   reviseBidMem,
@@ -52,7 +53,7 @@ router.post('/', authRequired, requireRole('driver'), async (req, res) => {
         phone,
         notifyRadiusKm: radius,
       });
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.status(201).json(result);
     }
 
@@ -105,7 +106,7 @@ router.get('/open', authRequired, requireRole('host'), async (req, res) => {
   try {
     if (!dbReady(req)) {
       const result = listOpenTendersMem(req.user);
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
     const { rows } = await query("SELECT * FROM service_requests WHERE status = 'open' ORDER BY created_at DESC");
@@ -116,11 +117,36 @@ router.get('/open', authRequired, requireRole('host'), async (req, res) => {
   }
 });
 
+router.get('/my/counter-bids', authRequired, requireRole('host'), async (req, res) => {
+  try {
+    if (!dbReady(req)) {
+      const result = listHostCounterBidsMem(req.user);
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+      return res.json(result);
+    }
+
+    const { rows } = await query(
+      `SELECT b.* FROM service_bids b
+       INNER JOIN service_requests r ON r.id = b.request_id
+       WHERE b.host_id = $1
+         AND b.status = 'pending'
+         AND b.driver_counter_at IS NOT NULL
+         AND r.status = 'open'
+       ORDER BY b.driver_counter_at DESC`,
+      [req.user.sub],
+    );
+    res.json({ bids: rows.map(rowToServiceBid) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load counter bids' });
+  }
+});
+
 router.get('/:id/bids', authRequired, async (req, res) => {
   try {
     if (!dbReady(req)) {
       const result = listTenderBidsMem(req.params.id, req.user);
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -147,17 +173,37 @@ router.post('/:id/bids', authRequired, requireRole('host'), async (req, res) => 
     const { lineItems, total, etaMinutes } = req.body || {};
     if (!dbReady(req)) {
       const result = submitBidMem(req.user, req.params.id, { lineItems, total, etaMinutes });
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.status(201).json(result);
     }
 
     const { rows: reqRows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
     if (!reqRows[0] || reqRows[0].status !== 'open') {
-      return res.status(404).json({ error: 'not_found' });
+      return res.status(404).json({ error: 'not_found', detail: 'הקריאה נסגרה או אינה זמינה להצעות' });
     }
 
     const items = lineItems || [];
     const sum = Number(total ?? items.reduce((s, l) => s + Number(l.amount || 0), 0));
+    if (!Number.isFinite(sum) || sum <= 0) {
+      return res.status(400).json({ error: 'invalid', detail: 'יש להזין מחיר גדול מאפס' });
+    }
+
+    const { rows: existingRows } = await query(
+      "SELECT * FROM service_bids WHERE request_id = $1 AND host_id = $2 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+      [req.params.id, req.user.sub],
+    );
+    if (existingRows[0]) {
+      await query(
+        `UPDATE service_bids SET line_items = $1, total = $2, eta_minutes = $3,
+         driver_counter_total = NULL, driver_counter_eta_minutes = NULL, driver_counter_message = NULL, driver_counter_at = NULL
+         WHERE id = $4`,
+        [JSON.stringify(items), sum, Number(etaMinutes || 15), existingRows[0].id],
+      );
+      const { rows } = await query('SELECT * FROM service_bids WHERE id = $1', [existingRows[0].id]);
+      await addEvent('ספק עדכן הצעת מחיר לקריאת חירום', 'activity', true);
+      return res.json({ bid: rowToServiceBid(rows[0]), updated: true });
+    }
+
     const id = createId('bid');
     await query(
       `INSERT INTO service_bids (id, request_id, host_id, line_items, total, eta_minutes, status, created_at)
@@ -165,6 +211,7 @@ router.post('/:id/bids', authRequired, requireRole('host'), async (req, res) => 
       [id, req.params.id, req.user.sub, JSON.stringify(items), sum, Number(etaMinutes || 15), Date.now()],
     );
     const { rows } = await query('SELECT * FROM service_bids WHERE id = $1', [id]);
+    await addEvent('הוגשה הצעת מחיר לקריאת חירום', 'activity', true);
     res.status(201).json({ bid: rowToServiceBid(rows[0]) });
   } catch (err) {
     console.error(err);
@@ -176,7 +223,7 @@ router.post('/:id/accept/:bidId', authRequired, requireRole('driver'), async (re
   try {
     if (!dbReady(req)) {
       const result = acceptBidMem(req.user, req.params.id, req.params.bidId);
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -216,7 +263,7 @@ router.post('/:id/confirm', authRequired, requireRole('host'), async (req, res) 
   try {
     if (!dbReady(req)) {
       const result = confirmBidMem(req.user, req.params.id);
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -240,7 +287,7 @@ router.post('/:id/decline', authRequired, requireRole('host'), async (req, res) 
   try {
     if (!dbReady(req)) {
       const result = declineBidMem(req.user, req.params.id);
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -274,7 +321,7 @@ router.post('/:id/location', authRequired, async (req, res) => {
 
     if (!dbReady(req)) {
       const result = updateTenderLocationMem(req.params.id, req.user, { lat, lng, role });
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -306,7 +353,7 @@ router.post('/:id/bids/:bidId/counter', authRequired, requireRole('driver'), asy
     const { total, etaMinutes, message } = req.body || {};
     if (!dbReady(req)) {
       const result = counterBidMem(req.user, req.params.id, req.params.bidId, { total, etaMinutes, message });
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -342,7 +389,7 @@ router.post('/:id/bids/:bidId/revise', authRequired, requireRole('host'), async 
     const { total, etaMinutes } = req.body || {};
     if (!dbReady(req)) {
       const result = reviseBidMem(req.user, req.params.id, req.params.bidId, { total, etaMinutes });
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 
@@ -373,7 +420,7 @@ router.post('/:id/complete', authRequired, requireRole('host'), async (req, res)
   try {
     if (!dbReady(req)) {
       const result = completeTenderMem(req.user, req.params.id);
-      if (result.error) return res.status(result.status || 400).json({ error: result.error });
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
       return res.json(result);
     }
 

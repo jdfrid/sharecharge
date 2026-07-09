@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Loader2, Star } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
-import { useTenders } from '../../hooks/useTenders';
+import { useTenderBidSnapshot } from '../../hooks/useTenders';
 import { notifyNewTenderBid } from '../../hooks/usePushNotifications';
 import { requireClientAuth } from '../../utils/requireClientAuth';
 import { currency } from '../../utils';
@@ -12,7 +12,7 @@ export function ClientTenderOffersPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state, acceptTenderBid, counterTenderBid } = useShareCharge();
-  const { bidsFor, refresh } = useTenders();
+  const { request, bids, reload, loading, countersPending } = useTenderBidSnapshot(id);
   const [busy, setBusy] = useState(null);
   const [counterFor, setCounterFor] = useState(null);
   const [counterTotal, setCounterTotal] = useState('');
@@ -21,27 +21,21 @@ export function ClientTenderOffersPage() {
   const prevBidCount = useRef(0);
 
   useEffect(() => {
-    const timer = setInterval(() => refresh?.('client'), 5000);
-    return () => clearInterval(timer);
-  }, [refresh]);
-
-  const request = state.serviceRequests?.find((item) => item.id === id);
-  const bids = useMemo(() => bidsFor(id).filter((item) => item.status === 'pending'), [bidsFor, id]);
-
-  useEffect(() => {
     if (request?.status === 'assigned') {
       navigate(`/client/track/${id}`, { replace: true });
     }
   }, [request?.status, id, navigate]);
 
   useEffect(() => {
-    if (bids.length > prevBidCount.current && prevBidCount.current > 0) {
+    if (bids.length > prevBidCount.current) {
       const latest = bids[bids.length - 1];
-      notifyNewTenderBid({
-        providerName: state.users.find((u) => u.id === latest.hostId)?.name,
-        total: latest.total,
-        etaMinutes: latest.etaMinutes,
-      });
+      if (prevBidCount.current > 0 || bids.length === 1) {
+        notifyNewTenderBid({
+          providerName: state.users.find((u) => u.id === latest.hostId)?.name,
+          total: latest.total,
+          etaMinutes: latest.etaMinutes,
+        });
+      }
     }
     prevBidCount.current = bids.length;
   }, [bids, state.users]);
@@ -55,7 +49,7 @@ export function ClientTenderOffersPage() {
     setBusy(bidId);
     try {
       await acceptTenderBid(id, bidId);
-      await refresh?.('client');
+      await reload?.();
     } catch (err) {
       alert(err?.message || 'בחירת ההצעה נכשלה');
     } finally {
@@ -73,7 +67,7 @@ export function ClientTenderOffersPage() {
         message: counterMessage,
       });
       setCounterFor(null);
-      await refresh?.('client');
+      await reload?.();
     } catch (err) {
       alert(err?.message || 'שליחת הצעה נגדית נכשלה');
     } finally {
@@ -84,12 +78,13 @@ export function ClientTenderOffersPage() {
   if (!request) {
     return (
       <Card>
-        <p className="text-sm font-bold text-sc-muted">טוען הצעות…</p>
+        <p className="text-sm font-bold text-sc-muted">{loading ? 'טוען הצעות…' : 'קריאה לא נמצאה'}</p>
       </Card>
     );
   }
 
   const waitingForProvider = request.status === 'pending_provider';
+  const waitingOnCounter = countersPending.length > 0;
   const selectedHost = waitingForProvider
     ? state.users.find((user) => user.id === request.hostId)?.name
     : null;
@@ -112,6 +107,18 @@ export function ClientTenderOffersPage() {
         ) : null}
       </Card>
 
+      {waitingOnCounter ? (
+        <Card className="border-violet-200 bg-violet-50/90">
+          <div className="flex items-center gap-2">
+            <Loader2 size={18} className="animate-spin text-violet-700" />
+            <p className="font-black text-violet-900">ממתין לתגובת הספק על ההצעה הנגדית</p>
+          </div>
+          <p className="mt-2 text-sm font-bold text-sc-muted">
+            שלחתם {countersPending.length} הצעות נגדיות · העמוד מתעדכן אוטומטית
+          </p>
+        </Card>
+      ) : null}
+
       {waitingForProvider ? (
         <Card className="border-amber-200 bg-amber-50/90">
           <div className="flex items-center gap-2">
@@ -125,12 +132,38 @@ export function ClientTenderOffersPage() {
         </Card>
       ) : null}
 
+      {!waitingForProvider && bids.length ? (
+        <Card className="border-[var(--sc-accent)]/25 bg-[var(--sc-accent)]/[0.08]">
+          <p className="font-black text-[var(--sc-accent)]">
+            {waitingOnCounter
+              ? `${bids.length} הצעות — ממתינות לתגובת ספק`
+              : `התקבלו ${bids.length} הצעות מחיר — בחרו ספק או שלחו הצעה נגדית`}
+          </p>
+        </Card>
+      ) : null}
+
+      {!waitingForProvider && !bids.length ? (
+        <Card className="border-dashed border-sc-border bg-sc-surface/80">
+          <div className="flex items-center justify-center gap-2 py-2">
+            <Loader2 size={18} className="animate-spin text-[var(--sc-accent)]" />
+            <p className="text-sm font-bold text-sc-muted">ממתין להצעות מספקי חירום באזור…</p>
+          </div>
+          <p className="mt-1 text-center text-[11px] font-bold text-sc-muted">העמוד מתעדכן אוטומטית כל 3 שניות</p>
+        </Card>
+      ) : null}
+
       {!waitingForProvider ? (
         <div className="space-y-2">
-          {bids.map((bid) => (
+          {bids.map((bid) => {
+            const counterSent = !!bid.driverCounterAt;
+            return (
             <div
               key={bid.id}
-              className="w-full rounded-sc-md border border-white/90 bg-white/85 p-4 text-right shadow-sm backdrop-blur-md"
+              className={`w-full rounded-sc-md border p-4 text-right shadow-sm backdrop-blur-md ${
+                counterSent
+                  ? 'border-violet-200 bg-violet-50/80'
+                  : 'border-white/90 bg-white/85'
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -138,9 +171,9 @@ export function ClientTenderOffersPage() {
                   <p className="mt-1 text-xs font-bold text-sc-muted">
                     {(bid.lineItems || []).map((line) => line.label).join(' · ')}
                   </p>
-                  {bid.driverCounterTotal != null ? (
-                    <p className="mt-2 text-[11px] font-bold text-amber-800">
-                      הצעה נגדית שלך: {currency(bid.driverCounterTotal)} · {bid.driverCounterEtaMinutes} דק
+                  {counterSent ? (
+                    <p className="mt-2 text-[11px] font-black text-violet-800">
+                      הצעה נגדית נשלחה: {currency(bid.driverCounterTotal)} · {bid.driverCounterEtaMinutes} דק · ממתין לספק
                     </p>
                   ) : null}
                   <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-600">
@@ -156,7 +189,7 @@ export function ClientTenderOffersPage() {
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  disabled={busy === bid.id}
+                  disabled={busy === bid.id || counterSent}
                   onClick={() => chooseBid(bid.id)}
                   className="rounded-sc-sm bg-[var(--sc-accent)] py-2.5 text-xs font-black text-white disabled:opacity-60"
                 >
@@ -164,23 +197,20 @@ export function ClientTenderOffersPage() {
                 </button>
                 <button
                   type="button"
+                  disabled={counterSent}
                   onClick={() => {
                     setCounterFor(bid.id);
                     setCounterTotal(String(Math.max(0, Math.round(bid.total * 0.85))));
                     setCounterEta(String(bid.etaMinutes));
                   }}
-                  className="rounded-sc-sm border border-sc-border bg-white py-2.5 text-xs font-black text-sc-text"
+                  className="rounded-sc-sm border border-sc-border bg-white py-2.5 text-xs font-black text-sc-text disabled:opacity-50"
                 >
                   הצעה נגדית
                 </button>
               </div>
             </div>
-          ))}
-          {!bids.length ? (
-            <p className="rounded-sc-md border border-dashed border-sc-border p-6 text-center text-sm font-bold text-sc-muted">
-              ממתין להצעות מספקי חירום באזור…
-            </p>
-          ) : null}
+            );
+          })}
         </div>
       ) : null}
 

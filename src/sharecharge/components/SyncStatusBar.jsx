@@ -27,6 +27,8 @@ export function SyncStatusBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { repositoryMode, loading, syncError } = useShareCharge();
+
+  if (location.pathname.startsWith('/ops/console')) return null;
   const portal = resolveApiPortal(location);
   const session = loadAuthSessions()[portal];
   const offlineDemo = !!session?.offlineDemo;

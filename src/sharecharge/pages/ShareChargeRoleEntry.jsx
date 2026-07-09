@@ -12,14 +12,25 @@ import {
   verifyOtp,
 } from '../data/sharechargeApi';
 import { createOtp, shortTime } from '../utils';
-import { clearAuthSession, isPortalSessionReady, sanitizePortalSession, setAuthSession } from '../auth/session';
-import { isSingleAppBuild, flavorLabel } from '../config/appConfig';
+import {
+  clearAuthSession,
+  getAuthSessionEmail,
+  isPortalSessionReady,
+  sanitizePortalSession,
+  setAuthSession,
+} from '../auth/session';
+import { isSingleAppBuild, flavorLabel, getShareChargeApp } from '../config/appConfig';
 
-const portalPaths = {
-  [SHARECHARGE_ROLE_KEYS.client]: '/client/home',
-  [SHARECHARGE_ROLE_KEYS.provider]: '/provider/dashboard',
-  [SHARECHARGE_ROLE_KEYS.system]: '/ops/dashboard',
-};
+function portalHomePath(portal) {
+  if (portal === SHARECHARGE_ROLE_KEYS.system) {
+    const opsApp = getShareChargeApp() === 'ops' && isSingleAppBuild();
+    return opsApp ? '/ops/dashboard' : '/ops/console';
+  }
+  if (portal === SHARECHARGE_ROLE_KEYS.client) return '/client/home';
+  if (portal === SHARECHARGE_ROLE_KEYS.provider) return '/provider/dashboard';
+  return '/sharecharge';
+}
+
 
 function isOtpCode(value) {
   return /^\d{4}$/.test(String(value || '').trim());
@@ -32,7 +43,8 @@ export function ShareChargeRoleEntry({ portal }) {
   const apiMode = getPreferredRepositoryMode() === 'api';
   const apiOrigin = getApiOrigin();
 
-  const [email, setEmail] = useState(config.email);
+  const [email, setEmail] = useState(() => getAuthSessionEmail(portal) || config.email);
+  const [sessionReady, setSessionReady] = useState(() => isPortalSessionReady(portal));
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -119,7 +131,7 @@ export function ShareChargeRoleEntry({ portal }) {
           offlineDemo: true,
         });
       }
-      navigate(portalPaths[portal], { replace: true });
+      navigate(portalHomePath(portal), { replace: true });
       return true;
     } catch (err) {
       setAuthError(formatShareChargeApiError(err, 'verify'));
@@ -195,19 +207,35 @@ export function ShareChargeRoleEntry({ portal }) {
     }
   };
 
-  useEffect(() => {
-    sanitizePortalSession(portal);
-    if (isPortalSessionReady(portal)) {
-      navigate(portalPaths[portal], { replace: true });
-      return;
-    }
+  const resetLoginForm = useCallback(() => {
     setSentOtp('');
     setOtpInput('');
     setDevCode('');
     setAuthError('');
     setAuthNotice('');
     setSentAt(null);
-  }, [portal, navigate]);
+    setDeliveryMethod('');
+  }, []);
+
+  const refreshSessionState = useCallback(() => {
+    sanitizePortalSession(portal);
+    setSessionReady(isPortalSessionReady(portal));
+  }, [portal]);
+
+  useEffect(() => {
+    refreshSessionState();
+  }, [refreshSessionState]);
+
+  const handleSwitchAccount = () => {
+    clearAuthSession(portal);
+    setSessionReady(false);
+    setEmail('');
+    resetLoginForm();
+  };
+
+  const handleContinueSession = () => {
+    navigate(portalHomePath(portal), { replace: true });
+  };
 
   useEffect(() => {
     if (apiMode) probeServer();
@@ -256,6 +284,27 @@ export function ShareChargeRoleEntry({ portal }) {
         </section>
 
         <div className="relative z-10 space-y-3">
+          {sessionReady ? (
+            <div className="rounded-sc-lg border border-emerald-200 bg-emerald-50 p-4 shadow-sc-card">
+              <p className="text-sm font-black text-emerald-900">כבר מחוברים</p>
+              <p className="mt-1 text-xs font-bold text-emerald-800">
+                חשבון פעיל: <span dir="ltr">{getAuthSessionEmail(portal) || email}</span>
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button type="button" onClick={handleContinueSession} className="sc-btn-primary flex-1 !text-sm">
+                  המשך ל{portal === SHARECHARGE_ROLE_KEYS.provider ? 'לוח הספק' : 'אפליקציה'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwitchAccount}
+                  className="sc-btn-outline flex-1 !text-sm !font-black"
+                >
+                  החלפת חשבון
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {apiMode && apiOrigin ? (
             <div
               className={`rounded-sc-sm border px-3 py-2 text-[11px] font-bold leading-6 ${
@@ -283,6 +332,7 @@ export function ShareChargeRoleEntry({ portal }) {
             </div>
           ) : null}
 
+          {!sessionReady ? (
           <div className="rounded-sc-lg border border-sc-border bg-white p-4 shadow-sc-card">
             <div className="mb-3 flex gap-2">
               <button
@@ -395,22 +445,8 @@ export function ShareChargeRoleEntry({ portal }) {
             {authNotice && <p className="mt-2 text-sm font-bold text-[var(--sc-accent-2)]">{authNotice}</p>}
             {authError && <p className="mt-2 text-sm font-bold text-red-500">{authError}</p>}
           </div>
+          ) : null}
 
-          {isPortalSessionReady(portal) && (
-            <p className="text-center text-xs font-bold text-[var(--sc-accent-2)]">
-              כבר מחוברים —{' '}
-              <button
-                type="button"
-                className="font-black underline"
-                onClick={() => {
-                  clearAuthSession(portal);
-                  window.location.reload();
-                }}
-              >
-                ניקוי סשן
-              </button>
-            </p>
-          )}
         </div>
       </div>
     </div>

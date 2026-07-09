@@ -63,12 +63,30 @@ export function saveAuthSessions(sessions) {
   storage().setItem(AUTH_KEY, JSON.stringify(sessions));
 }
 
+const PROVIDER_SESSION_KEYS = [
+  'sharecharge-seen-emergency-ids',
+  'sharecharge-seen-pending-confirm-ids',
+];
+
 export function clearAuthSession(role) {
   const sessions = loadAuthSessions();
   delete sessions[role];
   saveAuthSessions(sessions);
   clearStoredToken(role);
+  if (role === SHARECHARGE_ROLE_KEYS.provider) {
+    try {
+      for (const key of PROVIDER_SESSION_KEYS) {
+        sessionStorage.removeItem(key);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   emitAuthChange();
+}
+
+export function getAuthSessionEmail(role) {
+  return (loadAuthSessions()[role]?.email || '').trim();
 }
 
 export function setAuthSession(role, payload) {

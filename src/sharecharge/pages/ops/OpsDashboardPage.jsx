@@ -118,6 +118,12 @@ export function OpsDashboardPage() {
     <>
       <div className="mb-2 flex items-center justify-between gap-2">
         <Link
+          to="/ops/console"
+          className="rounded-full border border-[var(--sc-accent)]/30 bg-white px-3 py-2 text-xs font-black text-[var(--sc-accent)]"
+        >
+          קונסול ניהול (מחשב)
+        </Link>
+        <Link
           to="/ops/payments"
           className="flex items-center gap-2 rounded-sc-sm border border-[var(--sc-accent)]/20 bg-white px-3 py-2 text-xs font-black text-[var(--sc-accent)]"
         >

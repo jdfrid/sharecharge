@@ -184,11 +184,24 @@ export function rowToServiceRequest(row) {
 }
 
 export function rowToServiceBid(row) {
+  const rawItems = row.line_items;
+  let lineItems = [];
+  if (Array.isArray(rawItems)) lineItems = rawItems;
+  else if (typeof rawItems === 'string') {
+    try {
+      lineItems = JSON.parse(rawItems);
+    } catch {
+      lineItems = [];
+    }
+  } else if (rawItems && typeof rawItems === 'object') {
+    lineItems = rawItems;
+  }
+
   return {
     id: row.id,
     requestId: row.request_id,
     hostId: row.host_id,
-    lineItems: row.line_items || [],
+    lineItems,
     total: Number(row.total),
     etaMinutes: Number(row.eta_minutes),
     status: row.status,
