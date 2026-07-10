@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarClock, ChevronLeft, CreditCard } from 'lucide-react';
+import { CalendarClock, ChevronLeft, CreditCard, Store } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { resolveDriverIdForSession } from '../../auth/identity';
 import { isChargingStation } from '../../utils/serviceCategories';
@@ -151,6 +151,20 @@ export function ClientHomePage() {
           <span className="text-sm font-black text-sc-text">תשלומים</span>
         </button>
       </div>
+
+      <Link
+        to="/client/become-provider"
+        className="flex items-center gap-3 rounded-[var(--sc-radius-lg)] border border-dashed border-[var(--sc-accent)]/40 bg-[var(--sc-accent)]/[0.04] px-4 py-3"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-sc-md bg-[var(--sc-accent)]/10 text-[var(--sc-accent)]">
+          <Store size={20} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-[var(--sc-accent)]">הפוך לספק</p>
+          <p className="text-[11px] font-bold text-sc-muted">הרשמה עצמית — SOS או עמדת טעינה</p>
+        </div>
+        <ChevronLeft size={18} className="shrink-0 text-[var(--sc-accent)]" />
+      </Link>
 
       <section className="rounded-[var(--sc-radius-lg)] border border-sc-border bg-white p-4">
         <button

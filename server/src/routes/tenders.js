@@ -10,6 +10,7 @@ import {
   listHostCounterBidsMem,
   listOpenTendersMem,
   listTenderBidsMem,
+  redistributeTenderMem,
   reviseBidMem,
   submitBidMem,
   updateTenderLocationMem,
@@ -241,8 +242,8 @@ router.post('/:id/accept/:bidId', authRequired, requireRole('driver'), async (re
     if (!bid) return res.status(404).json({ error: 'not_found' });
 
     await query(
-      `UPDATE service_requests SET status = 'pending_provider', accepted_bid_id = $1, host_id = $2, amount = $3 WHERE id = $4`,
-      [bid.id, bid.host_id, bid.total, req.params.id],
+      `UPDATE service_requests SET status = 'pending_provider', accepted_bid_id = $1, host_id = $2, amount = $3, client_confirmed_at = $4 WHERE id = $5`,
+      [bid.id, bid.host_id, bid.total, Date.now(), req.params.id],
     );
     await query("UPDATE service_bids SET status = 'accepted' WHERE id = $1", [bid.id]);
     await query("UPDATE service_bids SET status = 'rejected' WHERE request_id = $1 AND id <> $2", [
@@ -273,8 +274,11 @@ router.post('/:id/confirm', authRequired, requireRole('host'), async (req, res) 
       return res.status(404).json({ error: 'not_found' });
     }
 
-    await query("UPDATE service_requests SET status = 'assigned' WHERE id = $1", [req.params.id]);
-    await addEvent('ספק אישר את ההצעה — השירות יוצא לדרך', 'activity', true);
+    await query(
+      "UPDATE service_requests SET status = 'assigned', provider_confirmed_at = $1, platform_confirmed_at = $2 WHERE id = $3",
+      [Date.now(), Date.now(), req.params.id],
+    );
+    await addEvent('ספק אישר את ההצעה — המיזם אישר את העסקה', 'activity', true);
     const { rows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
     res.json({ request: rowToServiceRequest(rows[0]) });
   } catch (err) {
@@ -451,6 +455,87 @@ router.post('/:id/complete', authRequired, requireRole('host'), async (req, res)
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to complete tender' });
+  }
+});
+
+router.post('/:id/redistribute', authRequired, requireRole('driver'), async (req, res) => {
+  try {
+    if (!dbReady(req)) {
+      const result = redistributeTenderMem(req.user, req.params.id);
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+      return res.json(result);
+    }
+
+    const { rows: reqRows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    const request = reqRows[0];
+    if (!request || request.driver_id !== req.user.sub) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    const allowedStatuses = ['assigned', 'in_progress', 'completed', 'pending_provider'];
+    if (!allowedStatuses.includes(request.status)) {
+      return res.status(400).json({ error: 'invalid', detail: 'לא ניתן להפיץ מחדש במצב הנוכחי' });
+    }
+    if (!request.host_id) {
+      return res.status(400).json({ error: 'invalid', detail: 'אין ספק משובץ להחרגה' });
+    }
+
+    const failedHostId = request.host_id;
+    let excluded = [];
+    try {
+      excluded = Array.isArray(request.excluded_host_ids)
+        ? request.excluded_host_ids
+        : JSON.parse(request.excluded_host_ids || '[]');
+    } catch {
+      excluded = [];
+    }
+    if (!excluded.includes(failedHostId)) excluded.push(failedHostId);
+
+    if (request.accepted_bid_id) {
+      await query("UPDATE service_bids SET status = 'rejected' WHERE id = $1", [request.accepted_bid_id]);
+    }
+    await query("UPDATE service_bids SET status = 'rejected' WHERE request_id = $1 AND host_id = $2", [
+      req.params.id,
+      failedHostId,
+    ]);
+
+    await query(
+      `UPDATE service_requests SET
+        status = 'open',
+        accepted_bid_id = NULL,
+        host_id = NULL,
+        amount = 0,
+        client_confirmed_at = NULL,
+        provider_confirmed_at = NULL,
+        platform_confirmed_at = NULL,
+        provider_lat = NULL,
+        provider_lng = NULL,
+        completed_at = NULL,
+        excluded_host_ids = $1
+       WHERE id = $2`,
+      [JSON.stringify(excluded), req.params.id],
+    );
+
+    const state = await loadFullState(true);
+    const providers = findProvidersInRadius({
+      stations: state.stations,
+      users: state.users,
+      lat: Number(request.lat),
+      lng: Number(request.lng),
+      radiusKm: Number(request.notify_radius_km || 50),
+    }).filter((p) => !excluded.includes(p.hostId));
+    const notify = summarizeEmergencyNotify({
+      providers,
+      radiusKm: Number(request.notify_radius_km || 50),
+      category: request.category,
+    });
+
+    await addEvent(`קריאה הוחזרה להפצה — ספק הוחרג`, 'activity', true);
+    const { rows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    res.json({ request: rowToServiceRequest(rows[0]), notify });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to redistribute tender' });
   }
 });
 

@@ -20,6 +20,7 @@ export function rowToUser(row) {
     email: row.email,
     phone: row.phone || null,
     role: row.role,
+    providerCapable: row.provider_capable === true,
     verified: row.verified,
     blocked: row.blocked,
     revenue: Number(row.revenue),
@@ -180,6 +181,14 @@ export function rowToServiceRequest(row) {
     expiresAt: row.expires_at ? Number(row.expires_at) : undefined,
     createdAt: Number(row.created_at),
     completedAt: row.completed_at ? Number(row.completed_at) : undefined,
+    clientConfirmedAt: row.client_confirmed_at ? Number(row.client_confirmed_at) : undefined,
+    providerConfirmedAt: row.provider_confirmed_at ? Number(row.provider_confirmed_at) : undefined,
+    platformConfirmedAt: row.platform_confirmed_at ? Number(row.platform_confirmed_at) : undefined,
+    excludedHostIds: Array.isArray(row.excluded_host_ids)
+      ? row.excluded_host_ids
+      : typeof row.excluded_host_ids === 'string'
+        ? JSON.parse(row.excluded_host_ids || '[]')
+        : [],
   };
 }
 

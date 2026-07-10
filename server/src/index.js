@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
 import stationRoutes from './routes/stations.js';
 import bookingRoutes from './routes/bookings.js';
 import tenderRoutes from './routes/tenders.js';
@@ -128,6 +129,7 @@ async function fetchHealthPayload() {
 }
 
 app.use('/api/sharecharge/auth', authRoutes);
+app.use('/api/sharecharge/users', userRoutes);
 app.use('/api/sharecharge/stations', stationRoutes);
 app.use('/api/sharecharge/bookings', bookingRoutes);
 app.use('/api/sharecharge/tenders', tenderRoutes);

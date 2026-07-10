@@ -713,6 +713,9 @@ export function ShareChargeProvider({ children }) {
           request.acceptedBidId = bidId;
           request.hostId = bid.hostId;
           request.amount = bid.total;
+          request.clientConfirmedAt = Date.now();
+          request.providerConfirmedAt = null;
+          request.platformConfirmedAt = null;
           bid.status = 'accepted';
         });
       },
@@ -726,6 +729,8 @@ export function ShareChargeProvider({ children }) {
           const request = draft.serviceRequests?.find((item) => item.id === requestId);
           if (!request || request.status !== 'pending_provider') return;
           request.status = 'assigned';
+          request.providerConfirmedAt = Date.now();
+          request.platformConfirmedAt = Date.now();
         });
       },
       declineTenderAssignment: async (requestId) => {
@@ -832,6 +837,98 @@ export function ShareChargeProvider({ children }) {
           request.status = 'completed';
           request.completedAt = Date.now();
         });
+      },
+      redistributeTender: async (requestId) => {
+        if (useApi) {
+          const data = await sharechargeApi.redistributeTender(SHARECHARGE_ROLE_KEYS.client, requestId);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data;
+        }
+        update((draft) => {
+          const request = draft.serviceRequests?.find((item) => item.id === requestId);
+          if (!request?.hostId) return;
+          const failedHostId = request.hostId;
+          const excluded = [...(request.excludedHostIds || [])];
+          if (!excluded.includes(failedHostId)) excluded.push(failedHostId);
+          request.status = 'open';
+          request.acceptedBidId = null;
+          request.hostId = null;
+          request.amount = 0;
+          request.clientConfirmedAt = null;
+          request.providerConfirmedAt = null;
+          request.platformConfirmedAt = null;
+          request.excludedHostIds = excluded;
+          draft.serviceBids
+            ?.filter((b) => b.requestId === requestId && b.hostId === failedHostId)
+            .forEach((b) => {
+              b.status = 'rejected';
+            });
+          addEvent(draft, 'קריאה הוחזרה להפצה — ספק הוחרג', 'warning');
+        });
+      },
+      becomeProvider: async (payload) => {
+        if (useApi) {
+          const data = await sharechargeApi.becomeProvider(SHARECHARGE_ROLE_KEYS.client, payload);
+          await refreshFromApi(SHARECHARGE_ROLE_KEYS.client);
+          return data;
+        }
+        let result = null;
+        update((draft) => {
+          const sessionEmail = loadAuthSessions().client?.email;
+          const driver = ensureDriverUserForEmail(draft, sessionEmail);
+          if (driver.providerCapable) {
+            result = { error: 'already_provider' };
+            return;
+          }
+          driver.providerCapable = true;
+          const { providerType, serviceCategories, businessName, stationName, address, lat, lng, power, plug, pricePerKwh, termsText } =
+            payload || {};
+          const displayName = businessName?.trim() || driver.name;
+          if (providerType === 'sos') {
+            for (const category of serviceCategories || []) {
+              draft.stations.unshift({
+                id: createId('station'),
+                hostId: driver.id,
+                name: `${displayName} · ${category}`,
+                address: address || 'שירות נייד',
+                lat: lat != null ? Number(lat) : 31.78,
+                lng: lng != null ? Number(lng) : 35.22,
+                distance: 0,
+                power: 0,
+                plug: '—',
+                pricePerKwh: 0,
+                available: true,
+                rating: 4.5,
+                photos: 0,
+                termsText: 'שירות חירום · לקוח שהפך לספק',
+                serviceCategory: category,
+                createdAt: Date.now(),
+              });
+            }
+          } else {
+            draft.stations.unshift({
+              id: createId('station'),
+              hostId: driver.id,
+              name: stationName,
+              address,
+              lat: lat != null ? Number(lat) : 32.08,
+              lng: lng != null ? Number(lng) : 34.78,
+              distance: 1,
+              power: Number(power || 11),
+              plug: plug || 'Type 2',
+              pricePerKwh: Number(pricePerKwh || 1.25),
+              available: true,
+              rating: 4.5,
+              photos: 0,
+              termsText: termsText || 'עמדת טעינה · לקוח שהפך לספק',
+              serviceCategory: 'charging',
+              createdAt: Date.now(),
+            });
+          }
+          addEvent(draft, `${driver.name} הפך לספק`);
+          result = { user: driver, message: 'נרשמתם כספק — התחברו בפורטל הספק עם אותו מייל' };
+        });
+        return result;
       },
       fetchPaymentSummary: async (portal = apiPortal) => {
         if (useApi) {

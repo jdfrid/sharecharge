@@ -50,6 +50,9 @@ export function buildEmergencyProviders({ stations = [], users = [], origin, max
 export function tenderMatchesProvider({ request, stations = [], hostId, maxDistance = 100 }) {
   if (!request || request.status !== 'open') return false;
 
+  const excluded = request.excludedHostIds || request.excluded_host_ids || [];
+  if (excluded.includes(hostId)) return false;
+
   const hostStations = stations.filter(
     (station) => station.hostId === hostId && isEmergencyProviderStation(station),
   );

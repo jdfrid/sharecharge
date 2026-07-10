@@ -40,6 +40,7 @@ import { ClientStationRedirect } from './sharecharge/routes/ClientStationRedirec
 import { ClientStationPage } from './sharecharge/pages/client/ClientStationPage';
 import { ClientServiceBrowsePage, ClientServiceBookPage } from './sharecharge/pages/client/ClientServicesPages';
 import { ClientActivityPage } from './sharecharge/pages/client/ClientActivityPage';
+import { ClientBecomeProviderPage } from './sharecharge/pages/client/ClientBecomeProviderPage';
 import { ProviderDashboardPage } from './sharecharge/pages/provider/ProviderDashboardPage';
 import { ProviderOrdersPage } from './sharecharge/pages/provider/ProviderOrdersPage';
 import { ProviderTransactionsPage } from './sharecharge/pages/provider/ProviderTransactionsPage';
@@ -106,6 +107,7 @@ function shareChargeRouteElements() {
             <Route path="/client/services/:category/:stationId" element={<ClientServiceBookPage />} />
             <Route element={<ClientGate />}>
               <Route path="/client/activity" element={<ClientActivityPage />} />
+              <Route path="/client/become-provider" element={<ClientBecomeProviderPage />} />
               <Route path="/client/navigate/:bookingId" element={<ClientNavigatePage />} />
               <Route path="/client/tender/:id/offers" element={<ClientTenderOffersPage />} />
               <Route path="/client/track/:id" element={<ClientTrackPage />} />

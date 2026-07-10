@@ -4,7 +4,10 @@ import { getShareChargeApp } from '../config/appConfig';
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
 export function useSyncedProviderHost(state) {
   const sessionEmail = getSessionProviderEmail();
-  const allHosts = useMemo(() => state.users.filter((u) => u.role === 'host'), [state.users]);
+  const allHosts = useMemo(
+    () => state.users.filter((u) => u.role === 'host' || u.providerCapable),
+    [state.users],
+  );
   const hosts = useMemo(() => {
     if (!sessionEmail) return allHosts;
     const ownHosts = allHosts.filter((h) => normalizeEmail(h.email) === sessionEmail);

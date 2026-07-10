@@ -75,7 +75,13 @@ async function resolveUser(normalizedEmail, expectedRole, dbReady, profile = {})
       );
       user = (await query('SELECT * FROM users WHERE id = $1', [id])).rows[0];
     } else if (user.role !== expectedRole && expectedRole !== 'admin') {
-      throw Object.assign(new Error(`Account is registered as ${user.role}, not ${expectedRole}`), { status: 403 });
+      if (expectedRole === 'driver' && user.role === 'host') {
+        /* host may still use client portal */
+      } else if (expectedRole === 'host' && user.role === 'driver' && user.provider_capable) {
+        /* driver upgraded to provider-capable */
+      } else {
+        throw Object.assign(new Error(`Account is registered as ${user.role}, not ${expectedRole}`), { status: 403 });
+      }
     } else if (expectedRole === 'admin' && user.role !== 'admin') {
       throw Object.assign(new Error('Not an admin account'), { status: 403 });
     }
@@ -284,7 +290,13 @@ router.post('/otp/verify', async (req, res) => {
     await clearOtp(normalizedEmail, portal, dbReady);
 
     const token = jwt.sign(
-      { sub: user.id, email: user.email, role: user.role, portal },
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        portal,
+        providerCapable: user.provider_capable === true || user.providerCapable === true,
+      },
       process.env.JWT_SECRET || 'dev-secret',
       { expiresIn: '30d' },
     );

@@ -273,7 +273,9 @@ function memUserToRow(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    phone: user.phone || null,
     role: user.role,
+    provider_capable: user.provider_capable === true || user.providerCapable === true,
     verified: user.verified ?? true,
     blocked: user.blocked ?? false,
     revenue: user.revenue ?? 0,
@@ -641,6 +643,10 @@ export function createTenderMem(jwtUser, payload) {
     expires_at: Date.now() + 30 * 60 * 1000,
     created_at: Date.now(),
     completed_at: null,
+    client_confirmed_at: null,
+    provider_confirmed_at: null,
+    platform_confirmed_at: null,
+    excluded_host_ids: [],
   };
   serviceRequests.unshift(row);
   seedDemoBids(id, category);
@@ -672,14 +678,14 @@ export function listTenderBidsMem(requestId, jwtUser) {
 
 export function listOpenTendersMem(jwtUser) {
   if (!initialized) initMemDataStore();
-  if (jwtUser.role !== 'host') return { error: 'forbidden', status: 403 };
+  if (jwtUser.role !== 'host' && !jwtUser.providerCapable) return { error: 'forbidden', status: 403 };
   const open = serviceRequests.filter((row) => row.status === 'open').map(rowToServiceRequest);
   return { requests: open };
 }
 
 export function listHostCounterBidsMem(jwtUser) {
   if (!initialized) initMemDataStore();
-  if (jwtUser.role !== 'host') return { error: 'forbidden', status: 403 };
+  if (jwtUser.role !== 'host' && !jwtUser.providerCapable) return { error: 'forbidden', status: 403 };
   const openIds = new Set(serviceRequests.filter((row) => row.status === 'open').map((row) => row.id));
   const bids = serviceBids
     .filter(
@@ -695,7 +701,9 @@ export function listHostCounterBidsMem(jwtUser) {
 
 export function submitBidMem(jwtUser, requestId, payload) {
   if (!initialized) initMemDataStore();
-  if (jwtUser.role !== 'host') return { error: 'forbidden', status: 403, detail: 'נדרש חשבון ספק' };
+  if (jwtUser.role !== 'host' && !jwtUser.providerCapable) {
+    return { error: 'forbidden', status: 403, detail: 'נדרש חשבון ספק' };
+  }
   const request = serviceRequests.find((row) => row.id === requestId);
   if (!request || request.status !== 'open') {
     return { error: 'not_found', status: 404, detail: 'הקריאה נסגרה או אינה זמינה להצעות' };
@@ -781,6 +789,9 @@ export function acceptBidMem(jwtUser, requestId, bidId) {
   request.accepted_bid_id = bidId;
   request.host_id = bid.host_id;
   request.amount = bid.total;
+  request.client_confirmed_at = Date.now();
+  request.provider_confirmed_at = null;
+  request.platform_confirmed_at = null;
   bid.status = 'accepted';
   serviceBids.filter((row) => row.request_id === requestId && row.id !== bidId).forEach((row) => {
     row.status = 'rejected';
@@ -796,7 +807,9 @@ export function confirmBidMem(jwtUser, requestId) {
     return { error: 'not_found', status: 404 };
   }
   request.status = 'assigned';
-  addEventMem('ספק אישר את ההצעה', 'activity');
+  request.provider_confirmed_at = Date.now();
+  request.platform_confirmed_at = Date.now();
+  addEventMem('ספק אישר את ההצעה — המיזם אישר את העסקה', 'activity');
   return { request: rowToServiceRequest(request) };
 }
 
@@ -838,7 +851,10 @@ export function completeTenderMem(jwtUser, requestId) {
   if (!initialized) initMemDataStore();
   const request = serviceRequests.find((row) => row.id === requestId);
   if (!request) return { error: 'not_found', status: 404 };
-  if (jwtUser.role !== 'host' || request.host_id !== jwtUser.sub) {
+  if (jwtUser.role !== 'host' && !jwtUser.providerCapable) {
+    return { error: 'forbidden', status: 403 };
+  }
+  if (request.host_id !== jwtUser.sub) {
     return { error: 'forbidden', status: 403 };
   }
 
@@ -861,6 +877,164 @@ export function completeTenderMem(jwtUser, requestId) {
   });
   addEventMem(`שירות חירום הושלם · ${request.amount}₪`, 'activity');
   return { request: rowToServiceRequest(request) };
+}
+
+const SOS_CATEGORIES_MEM = new Set(['fuel', 'puncture', 'tow', 'garage', 'battery', 'bakery']);
+
+export function becomeProviderMem(jwtUser, payload) {
+  if (!initialized) initMemDataStore();
+  if (jwtUser.role !== 'driver') return { error: 'forbidden', status: 403, detail: 'רק לקוחות יכולים להפוך לספק' };
+
+  const driver = findUserById(jwtUser.sub);
+  if (!driver) return { error: 'not_found', status: 404 };
+  if (driver.provider_capable) {
+    return { error: 'already_provider', status: 409, detail: 'כבר רשום כספק' };
+  }
+
+  const { providerType, serviceCategories, businessName, stationName, address, lat, lng, power, plug, pricePerKwh, termsText } =
+    payload || {};
+  const categories = Array.isArray(serviceCategories) ? serviceCategories.filter((c) => SOS_CATEGORIES_MEM.has(c)) : [];
+
+  if (providerType === 'sos' && !categories.length) {
+    return { error: 'invalid', status: 400, detail: 'יש לבחור לפחות סוג שירות אחד' };
+  }
+  if (providerType === 'charging' && (!stationName?.trim() || !address?.trim())) {
+    return { error: 'invalid', status: 400, detail: 'יש למלא פרטי עמדת טעינה' };
+  }
+
+  const memUser = loadMemUserByEmail(driver.email) || {
+    id: driver.id,
+    name: driver.name,
+    email: driver.email,
+    role: 'driver',
+    verified: true,
+    blocked: false,
+    revenue: 0,
+    spend: 0,
+    createdAt: Date.now(),
+  };
+  memUser.provider_capable = true;
+  memUser.providerCapable = true;
+  saveMemUser(memUser);
+
+  const idx = users.findIndex((u) => u.id === driver.id);
+  if (idx >= 0) users[idx].provider_capable = true;
+
+  const createdStations = [];
+  const now = Date.now();
+  const displayName = businessName?.trim() || driver.name;
+
+  if (providerType === 'sos') {
+    for (const category of categories) {
+      const station = {
+        id: createId('station'),
+        host_id: driver.id,
+        name: `${displayName} · ${category}`,
+        address: address?.trim() || 'שירות נייד',
+        lat: Number(lat) || 31.78,
+        lng: Number(lng) || 35.22,
+        distance: 0,
+        power: 0,
+        plug: '—',
+        price_per_kwh: 0,
+        available: true,
+        rating: 4.5,
+        photos: 0,
+        terms_text: 'שירות חירום · לקוח שהפך לספק',
+        service_category: category,
+        created_at: now,
+      };
+      stations.unshift(station);
+      createdStations.push(rowToStation(station));
+    }
+  } else {
+    const station = {
+      id: createId('station'),
+      host_id: driver.id,
+      name: stationName.trim(),
+      address: address.trim(),
+      lat: Number(lat) || 32.08,
+      lng: Number(lng) || 34.78,
+      distance: 1,
+      power: Number(power) || 11,
+      plug: plug || 'Type 2',
+      price_per_kwh: Number(pricePerKwh) || 1.25,
+      available: true,
+      rating: 4.5,
+      photos: 0,
+      terms_text: termsText || 'עמדת טעינה · לקוח שהפך לספק',
+      service_category: 'charging',
+      created_at: now,
+    };
+    stations.unshift(station);
+    createdStations.push(rowToStation(station));
+  }
+
+  addEventMem(`${driver.name} הפך לספק (${providerType})`, 'activity');
+  return {
+    user: rowToUser({ ...driver, provider_capable: true }),
+    stations: createdStations,
+    message: 'נרשמתם כספק — התחברו בפורטל הספק עם אותו מייל',
+  };
+}
+
+export function redistributeTenderMem(jwtUser, requestId) {
+  if (!initialized) initMemDataStore();
+  const request = serviceRequests.find((row) => row.id === requestId);
+  if (!request || request.driver_id !== jwtUser.sub) {
+    return { error: 'not_found', status: 404 };
+  }
+
+  const allowedStatuses = ['assigned', 'in_progress', 'completed', 'pending_provider'];
+  if (!allowedStatuses.includes(request.status)) {
+    return { error: 'invalid', status: 400, detail: 'לא ניתן להפיץ מחדש במצב הנוכחי' };
+  }
+
+  const failedHostId = request.host_id;
+  if (!failedHostId) {
+    return { error: 'invalid', status: 400, detail: 'אין ספק משובץ להחרגה' };
+  }
+
+  const excluded = Array.isArray(request.excluded_host_ids) ? [...request.excluded_host_ids] : [];
+  if (!excluded.includes(failedHostId)) excluded.push(failedHostId);
+
+  const acceptedBid = serviceBids.find((row) => row.id === request.accepted_bid_id);
+  if (acceptedBid) acceptedBid.status = 'rejected';
+
+  serviceBids
+    .filter((row) => row.request_id === requestId && row.host_id === failedHostId)
+    .forEach((row) => {
+      row.status = 'rejected';
+    });
+
+  request.status = 'open';
+  request.accepted_bid_id = null;
+  request.host_id = null;
+  request.amount = 0;
+  request.client_confirmed_at = null;
+  request.provider_confirmed_at = null;
+  request.platform_confirmed_at = null;
+  request.provider_lat = null;
+  request.provider_lng = null;
+  request.completed_at = null;
+  request.excluded_host_ids = excluded;
+
+  const providers = findProvidersInRadius({
+    stations,
+    users: listMemUsers(),
+    lat: request.lat,
+    lng: request.lng,
+    radiusKm: Number(request.notify_radius_km || 50),
+  }).filter((p) => !excluded.includes(p.hostId));
+
+  const notify = summarizeEmergencyNotify({
+    providers,
+    radiusKm: Number(request.notify_radius_km || 50),
+    category: request.category,
+  });
+
+  addEventMem(`קריאה הוחזרה להפצה — ספק ${failedHostId} הוחרג`, 'activity');
+  return { request: rowToServiceRequest(request), notify };
 }
 
 function memPaymentRow(payment) {

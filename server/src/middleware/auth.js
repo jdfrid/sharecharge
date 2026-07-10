@@ -14,11 +14,17 @@ export function authRequired(req, res, next) {
   }
 }
 
+export function hasProviderAccess(user) {
+  return user?.role === 'host' || (user?.role === 'driver' && user?.providerCapable === true);
+}
+
 export function requireRole(...roles) {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    next();
+    if (roles.includes(req.user.role)) return next();
+    if (roles.includes('host') && hasProviderAccess(req.user)) return next();
+    return res.status(403).json({ error: 'Forbidden' });
   };
 }

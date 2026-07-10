@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Navigation } from 'lucide-react';
+import { ChevronLeft, Navigation, RefreshCw } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { useTenders } from '../../hooks/useTenders';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
@@ -14,9 +14,10 @@ const TrackMap = lazy(() => import('../../components/TrackMap').then((m) => ({ d
 export function ClientTrackPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state } = useShareCharge();
+  const { state, redistributeTender } = useShareCharge();
   const { refresh } = useTenders();
   usePushNotifications(true);
+  const [busy, setBusy] = useState(false);
 
   const request = state.serviceRequests?.find((item) => item.id === id);
   const bid = state.serviceBids?.find((item) => item.id === request?.acceptedBidId);
@@ -51,6 +52,20 @@ export function ClientTrackPage() {
   }
 
   const canNavigate = providerLat != null && providerLng != null;
+  const canRedistribute = ['assigned', 'in_progress', 'completed', 'pending_provider'].includes(request.status);
+
+  const handleRedistribute = async () => {
+    if (!window.confirm('הספק לא סיפק את השירות? הקריאה תופץ מחדש לכל הספקים מלבד הספק הנוכחי.')) return;
+    setBusy(true);
+    try {
+      await redistributeTender(id);
+      navigate(`/client/tender/${id}/offers`, { replace: true });
+    } catch (err) {
+      alert(err?.message || 'החזרה להפצה נכשלה');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -113,6 +128,18 @@ export function ClientTrackPage() {
         ) : (
           <p className="mt-4 text-center text-xs font-bold text-[var(--sc-accent-2)]">הספק בדרך — עדכון אוטומטי</p>
         )}
+
+        {canRedistribute ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleRedistribute}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-sc-md border border-amber-300 bg-amber-50 py-3 text-sm font-black text-amber-900 disabled:opacity-60"
+          >
+            <RefreshCw size={16} className={busy ? 'animate-spin' : ''} />
+            {busy ? 'מפיץ מחדש…' : 'ספק לא סיפק — החזר להפצה'}
+          </button>
+        ) : null}
       </Card>
     </>
   );

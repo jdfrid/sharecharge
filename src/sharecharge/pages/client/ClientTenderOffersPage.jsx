@@ -1,12 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Loader2, Star } from 'lucide-react';
+import { CheckCircle, ChevronLeft, Circle, Loader2, Star, Users } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { useTenderBidSnapshot } from '../../hooks/useTenders';
 import { notifyNewTenderBid } from '../../hooks/usePushNotifications';
 import { requireClientAuth } from '../../utils/requireClientAuth';
 import { currency } from '../../utils';
 import { Card } from '../../components/ui/Card';
+
+function PartyStatus({ label, confirmed, waiting }) {
+  return (
+    <div className="flex items-center gap-2 rounded-sc-sm border border-sc-border bg-white px-3 py-2">
+      {confirmed ? (
+        <CheckCircle size={18} className="shrink-0 text-emerald-600" />
+      ) : waiting ? (
+        <Loader2 size={18} className="shrink-0 animate-spin text-amber-600" />
+      ) : (
+        <Circle size={18} className="shrink-0 text-sc-muted" />
+      )}
+      <div className="min-w-0">
+        <p className="text-xs font-black text-sc-text">{label}</p>
+        <p className="text-[10px] font-bold text-sc-muted">
+          {confirmed ? 'אושר' : waiting ? 'ממתין' : 'טרם אושר'}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export function ClientTenderOffersPage() {
   const { id } = useParams();
@@ -18,6 +38,7 @@ export function ClientTenderOffersPage() {
   const [counterTotal, setCounterTotal] = useState('');
   const [counterEta, setCounterEta] = useState('15');
   const [counterMessage, setCounterMessage] = useState('');
+  const [confirmBidId, setConfirmBidId] = useState(null);
   const prevBidCount = useRef(0);
 
   useEffect(() => {
@@ -49,9 +70,10 @@ export function ClientTenderOffersPage() {
     setBusy(bidId);
     try {
       await acceptTenderBid(id, bidId);
+      setConfirmBidId(null);
       await reload?.();
     } catch (err) {
-      alert(err?.message || 'בחירת ההצעה נכשלה');
+      alert(err?.message || 'אישור העסקה נכשל');
     } finally {
       setBusy(null);
     }
@@ -88,6 +110,8 @@ export function ClientTenderOffersPage() {
   const selectedHost = waitingForProvider
     ? state.users.find((user) => user.id === request.hostId)?.name
     : null;
+  const selectedBid = bids.find((b) => b.id === request.acceptedBidId)
+    || state.serviceBids?.find((b) => b.id === request.acceptedBidId);
 
   return (
     <>
@@ -121,24 +145,41 @@ export function ClientTenderOffersPage() {
 
       {waitingForProvider ? (
         <Card className="border-amber-200 bg-amber-50/90">
-          <div className="flex items-center gap-2">
-            <Loader2 size={18} className="animate-spin text-amber-700" />
-            <p className="font-black text-amber-900">ממתין לאישור ספק</p>
-          </div>
-          <p className="mt-2 text-sm font-bold text-sc-muted">
-            בחרת את {selectedHost || 'הספק'} · {currency(request.amount)} — הספק צריך לאשר באפליקציה
+          <h2 className="text-lg font-black text-amber-900">אישור עסקה — שלושה צדדים</h2>
+          <p className="mt-1 text-sm font-bold text-sc-muted">
+            בחרתם את {selectedHost || 'הספק'} · {currency(request.amount)}
+            {selectedBid ? ` · ${selectedBid.etaMinutes} דק` : ''}
           </p>
-          <p className="mt-1 text-xs font-bold text-sc-muted">לאחר אישור הספק תועברו אוטומטית למעקב</p>
+          <div className="mt-3 grid gap-2">
+            <PartyStatus label="לקוח (אתם)" confirmed={!!request.clientConfirmedAt} />
+            <PartyStatus label={`ספק — ${selectedHost || '…'}`} waiting={!request.providerConfirmedAt} confirmed={!!request.providerConfirmedAt} />
+            <PartyStatus
+              label="מיזם ShareCharge (פלטפורמה)"
+              waiting={!!request.providerConfirmedAt && !request.platformConfirmedAt}
+              confirmed={!!request.platformConfirmedAt}
+            />
+          </div>
+          <p className="mt-3 text-xs font-bold text-amber-800">
+            לאחר אישור הספק והפלטפורמה תועברו אוטומטית למעקב
+          </p>
         </Card>
       ) : null}
 
       {!waitingForProvider && bids.length ? (
         <Card className="border-[var(--sc-accent)]/25 bg-[var(--sc-accent)]/[0.08]">
-          <p className="font-black text-[var(--sc-accent)]">
-            {waitingOnCounter
-              ? `${bids.length} הצעות — ממתינות לתגובת ספק`
-              : `התקבלו ${bids.length} הצעות מחיר — בחרו ספק או שלחו הצעה נגדית`}
-          </p>
+          <div className="flex items-start gap-2">
+            <Users size={20} className="mt-0.5 shrink-0 text-[var(--sc-accent)]" />
+            <div>
+              <p className="font-black text-[var(--sc-accent)]">
+                {waitingOnCounter
+                  ? `${bids.length} ספקים שלחו הצעות — ממתינות לתגובה`
+                  : `התקבלו ${bids.length} הצעות מ-${bids.length} ספקים שונים`}
+              </p>
+              <p className="mt-1 text-xs font-bold text-sc-muted">
+                כל הספקים מוצגים למטה · בחרו הצעה ולחצו «אישור עסקה»
+              </p>
+            </div>
+          </div>
         </Card>
       ) : null}
 
@@ -154,19 +195,23 @@ export function ClientTenderOffersPage() {
 
       {!waitingForProvider ? (
         <div className="space-y-2">
-          {bids.map((bid) => {
+          {bids.map((bid, index) => {
             const counterSent = !!bid.driverCounterAt;
+            const isConfirming = confirmBidId === bid.id;
             return (
             <div
               key={bid.id}
               className={`w-full rounded-sc-md border p-4 text-right shadow-sm backdrop-blur-md ${
                 counterSent
                   ? 'border-violet-200 bg-violet-50/80'
-                  : 'border-white/90 bg-white/85'
+                  : isConfirming
+                    ? 'border-emerald-300 bg-emerald-50/80 ring-2 ring-emerald-200'
+                    : 'border-white/90 bg-white/85'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
+                  <p className="text-[10px] font-black text-sc-muted">ספק #{index + 1}</p>
                   <p className="font-black text-sc-text">{hostName(bid.hostId)}</p>
                   <p className="mt-1 text-xs font-bold text-sc-muted">
                     {(bid.lineItems || []).map((line) => line.label).join(' · ')}
@@ -186,28 +231,55 @@ export function ClientTenderOffersPage() {
                   <p className="text-xs font-bold text-sc-muted">{bid.etaMinutes} דק</p>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={busy === bid.id || counterSent}
-                  onClick={() => chooseBid(bid.id)}
-                  className="rounded-sc-sm bg-[var(--sc-accent)] py-2.5 text-xs font-black text-white disabled:opacity-60"
-                >
-                  {busy === bid.id ? '…' : 'בחר הצעה'}
-                </button>
-                <button
-                  type="button"
-                  disabled={counterSent}
-                  onClick={() => {
-                    setCounterFor(bid.id);
-                    setCounterTotal(String(Math.max(0, Math.round(bid.total * 0.85))));
-                    setCounterEta(String(bid.etaMinutes));
-                  }}
-                  className="rounded-sc-sm border border-sc-border bg-white py-2.5 text-xs font-black text-sc-text disabled:opacity-50"
-                >
-                  הצעה נגדית
-                </button>
-              </div>
+
+              {isConfirming ? (
+                <div className="mt-3 rounded-sc-sm border border-emerald-200 bg-white p-3">
+                  <p className="text-xs font-black text-emerald-900">אישור עסקה סופי</p>
+                  <p className="mt-1 text-[11px] font-bold text-sc-muted">
+                    לקוח + ספק ({hostName(bid.hostId)}) + ShareCharge — שלושה צדדים
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmBidId(null)}
+                      className="rounded-sc-sm border border-sc-border py-2.5 text-xs font-black"
+                    >
+                      ביטול
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy === bid.id}
+                      onClick={() => chooseBid(bid.id)}
+                      className="rounded-sc-sm bg-emerald-600 py-2.5 text-xs font-black text-white disabled:opacity-60"
+                    >
+                      {busy === bid.id ? '…' : 'אישור עסקה'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={busy === bid.id || counterSent}
+                    onClick={() => setConfirmBidId(bid.id)}
+                    className="rounded-sc-sm bg-[var(--sc-accent)] py-2.5 text-xs font-black text-white disabled:opacity-60"
+                  >
+                    אישור עסקה
+                  </button>
+                  <button
+                    type="button"
+                    disabled={counterSent}
+                    onClick={() => {
+                      setCounterFor(bid.id);
+                      setCounterTotal(String(Math.max(0, Math.round(bid.total * 0.85))));
+                      setCounterEta(String(bid.etaMinutes));
+                    }}
+                    className="rounded-sc-sm border border-sc-border bg-white py-2.5 text-xs font-black text-sc-text disabled:opacity-50"
+                  >
+                    הצעה נגדית
+                  </button>
+                </div>
+              )}
             </div>
             );
           })}

@@ -184,6 +184,9 @@ export function ProviderTendersPage() {
               <p className="font-black">{categoryLabel(request.category)}</p>
               <p className="mt-1 text-sm font-bold text-sc-muted">{request.addressText}</p>
               <p className="mt-2 text-lg font-black text-[var(--sc-accent)]">₪{request.amount}</p>
+              <p className="mt-2 text-xs font-bold text-sc-muted">
+                לקוח אישר · ממתין לאישורכם + אישור מיזם ShareCharge
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"

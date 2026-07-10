@@ -366,6 +366,8 @@ export const sharechargeApi = {
   updateTenderLocation: (portal, id, payload) =>
     apiRequest(`/tenders/${id}/location`, { method: 'POST', body: payload, portal }),
   completeTender: (portal, id) => apiRequest(`/tenders/${id}/complete`, { method: 'POST', portal }),
+  redistributeTender: (portal, id) => apiRequest(`/tenders/${id}/redistribute`, { method: 'POST', portal }),
+  becomeProvider: (portal, payload) => apiRequest('/users/me/become-provider', { method: 'POST', body: payload, portal }),
   fetchPayments: (portal) => apiRequest('/payments', { portal }),
   fetchPaymentSummary: (portal) => apiRequest('/payments/summary', { portal }),
   fetchPaymentMethods: (portal) => apiRequest('/payments/methods', { portal }),

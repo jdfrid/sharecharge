@@ -67,7 +67,9 @@ export function resolveHostIdForSession(state) {
   if (fromJwt) return fromJwt;
   const email = getSessionProviderEmail();
   if (!email) return state.users.find((u) => u.role === 'host')?.id || '';
-  const host = state.users.find((u) => u.role === 'host' && normalizeEmail(u.email) === email);
+  const host = state.users.find(
+    (u) => (u.role === 'host' || u.providerCapable) && normalizeEmail(u.email) === email,
+  );
   return host?.id || '';
 }
 
