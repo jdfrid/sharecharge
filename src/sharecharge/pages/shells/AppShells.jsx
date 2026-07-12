@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, CalendarClock, LayoutGrid, ClipboardList, Wallet, Radio, Zap, CreditCard } from 'lucide-react';
+import { Home, CalendarClock, LayoutGrid, ClipboardList, Wallet, Radio, CreditCard } from 'lucide-react';
 import { MobileAppShell } from '../../components/shell/MobileAppShell';
 import { ProviderEmergencyAlerts } from '../../components/ProviderEmergencyAlerts';
 import { ProviderCounterAlerts } from '../../components/ProviderCounterAlerts';
@@ -66,7 +66,6 @@ export function ClientShell() {
       homeTo={homeLink()}
       bottomNav={[
         { to: '/client/home', label: 'בית', icon: Home, end: true },
-        { to: '/client/charging/map', label: 'טעינה', icon: Zap, center: true },
         { to: '/client/activity', label: 'הזמנות', icon: CalendarClock },
         { to: '/client/payments', label: 'תשלומים', icon: CreditCard },
       ]}
