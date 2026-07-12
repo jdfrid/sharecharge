@@ -1,11 +1,11 @@
 ShareCharge APK build
-Built: 10.7.2026, 11:04:04
-Version: 1.0.39 (code 39)
+Built: 12.7.2026, 22:17:30
+Version: 1.0.40 (code 40)
 
 Latest files (use these):
-  release/install/ShareCharge-client-20260710-080404.apk
-  release/install/ShareCharge-provider-20260710-080404.apk
-  release/install/ShareCharge-ops-20260710-080404.apk
+  release/install/ShareCharge-client-20260712-191730.apk
+  release/install/ShareCharge-provider-20260712-191730.apk
+  release/install/ShareCharge-ops-20260712-191730.apk
 
 Stable names (overwritten each build):
   release/install/ShareCharge-client.apk
