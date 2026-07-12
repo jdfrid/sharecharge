@@ -26,7 +26,7 @@ export function ClientBecomeProviderPage() {
   const [stationName, setStationName] = useState('');
   const [address, setAddress] = useState('');
   const [power, setPower] = useState('11');
-  const [plug, setPlug] = useState('Type 2');
+  const [plug, setPlug] = useState('station');
   const [pricePerKwh, setPricePerKwh] = useState('1.25');
   const [termsText, setTermsText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -200,7 +200,7 @@ export function ClientBecomeProviderPage() {
                   סוג מחבר
                   <select value={plug} onChange={(e) => setPlug(e.target.value)} className="sc-field text-sm">
                     {PLUG_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
+                      <option key={opt.id} value={opt.id}>{opt.label}</option>
                     ))}
                   </select>
                 </label>
