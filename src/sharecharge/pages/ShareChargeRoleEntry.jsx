@@ -5,12 +5,16 @@ import { roleEntryConfig, SHARECHARGE_ROLE_KEYS } from '../constants';
 import { getPreferredRepositoryMode } from '../data/apiRepository.stub';
 import {
   checkApiHealth,
+  fetchGoogleAuthConfig,
   formatShareChargeApiError,
   getApiOrigin,
+  getGoogleClientIdFromEnv,
+  googleSignIn,
   registerAccount,
   sendOtp,
   verifyOtp,
 } from '../data/sharechargeApi';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import { createOtp, shortTime } from '../utils';
 import {
   clearAuthSession,
@@ -61,6 +65,8 @@ export function ShareChargeRoleEntry({ portal }) {
   const [busy, setBusy] = useState(false);
   const [serverOk, setServerOk] = useState(apiMode ? null : true);
   const [serverMessage, setServerMessage] = useState('');
+  const [googleClientId, setGoogleClientId] = useState(() => getGoogleClientIdFromEnv());
+  const [googleEnabled, setGoogleEnabled] = useState(!!getGoogleClientIdFromEnv());
 
   const visibleCode = devCode || (isOtpCode(otpInput) ? otpInput : '');
 
@@ -136,6 +142,25 @@ export function ShareChargeRoleEntry({ portal }) {
     } catch (err) {
       setAuthError(formatShareChargeApiError(err, 'verify'));
       return false;
+    }
+  };
+
+  const completeGoogleSignIn = async (idToken) => {
+    setAuthError('');
+    setBusy(true);
+    try {
+      const data = await googleSignIn(portal, idToken);
+      setAuthSession(portal, {
+        verified: true,
+        email: data.user?.email || email,
+        verifiedAt: Date.now(),
+        token: data.token,
+      });
+      navigate(portalHomePath(portal), { replace: true });
+    } catch (err) {
+      setAuthError(formatShareChargeApiError(err, 'verify'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -241,6 +266,19 @@ export function ShareChargeRoleEntry({ portal }) {
     if (apiMode) probeServer();
   }, [apiMode, probeServer]);
 
+  useEffect(() => {
+    if (!apiMode || getGoogleClientIdFromEnv()) return undefined;
+    let cancelled = false;
+    fetchGoogleAuthConfig().then((config) => {
+      if (cancelled) return;
+      if (config?.clientId) setGoogleClientId(config.clientId);
+      setGoogleEnabled(!!config?.enabled && !!config?.clientId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiMode]);
+
   return (
     <div dir="rtl" className="sc-skin sc-no-motion min-h-screen bg-[var(--sc-bg)] text-sc-text">
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col overflow-hidden px-4 py-[calc(1rem+env(safe-area-inset-top,0px))] pb-8">
@@ -268,7 +306,7 @@ export function ShareChargeRoleEntry({ portal }) {
             <img src="./sharecharge-logo.png" alt="" className="h-full w-full object-cover opacity-95" />
             <div className="absolute inset-x-4 bottom-3 rounded-sc-sm border border-sc-border bg-white px-4 py-3 shadow-sm">
               <p className="text-sm font-black text-sc-text">{config.title}</p>
-              <p className="text-xs font-bold text-sc-muted">הזדהות לפי מייל וקוד חד-פעמי</p>
+              <p className="text-xs font-bold text-sc-muted">הזדהות במייל · OTP · או Google</p>
             </div>
           </div>
 
@@ -353,6 +391,23 @@ export function ShareChargeRoleEntry({ portal }) {
             <p className="mb-3 text-sm font-black text-[var(--sc-accent)]">
               {isSignup ? 'יצירת משתמש / ספק' : 'קוד אימות'}
             </p>
+
+            {apiMode && googleEnabled && googleClientId ? (
+              <>
+                <GoogleSignInButton
+                  clientId={googleClientId}
+                  disabled={busy || serverOk === false}
+                  onSuccess={completeGoogleSignIn}
+                  onError={(err) => setAuthError(err?.message || 'כניסה עם Google נכשלה')}
+                />
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-sc-border" />
+                  <span className="text-xs font-bold text-sc-muted">או עם מייל</span>
+                  <div className="h-px flex-1 bg-sc-border" />
+                </div>
+              </>
+            ) : null}
+
             {isSignup ? (
               <>
                 <label className="text-xs font-bold text-sc-muted">

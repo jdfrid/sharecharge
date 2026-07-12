@@ -10,6 +10,7 @@ import {
 } from '../devAuthStore.js';
 import { createId, createOtp, PORTAL_TO_ROLE, rowToUser } from '../utils.js';
 import { deliverOtp, otpDeliveryConfigured } from '../services/otpDeliveryService.js';
+import { getGoogleClientId, isGoogleAuthEnabled, verifyGoogleIdToken } from '../services/googleAuthService.js';
 
 const router = Router();
 
@@ -146,6 +147,72 @@ async function clearOtp(email, portal, dbReady) {
   }
   clearMemOtp(email, portal);
 }
+
+function signAuthToken(user, portal) {
+  return jwt.sign(
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      portal,
+      providerCapable: user.provider_capable === true || user.providerCapable === true,
+    },
+    process.env.JWT_SECRET || 'dev-secret',
+    { expiresIn: '30d' },
+  );
+}
+
+function respondAuthSuccess(res, user, portal) {
+  return res.json({
+    token: signAuthToken(user, portal),
+    user,
+    portal,
+    verifiedAt: Date.now(),
+    method: 'google',
+  });
+}
+
+router.get('/google/config', (_req, res) => {
+  res.json({
+    enabled: isGoogleAuthEnabled(),
+    clientId: getGoogleClientId(),
+  });
+});
+
+router.post('/google', async (req, res) => {
+  try {
+    const { idToken, portal } = req.body || {};
+    if (!PORTAL_TO_ROLE[portal] || !idToken) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    const profile = await verifyGoogleIdToken(idToken);
+    const dbReady = !!req.app.locals.dbReady;
+    const expectedRole = PORTAL_TO_ROLE[portal];
+
+    const user = await resolveUser(profile.email, expectedRole, dbReady, {
+      name: profile.name,
+    });
+
+    if (dbReady) {
+      await query('UPDATE users SET verified = true, name = COALESCE(NULLIF(name, \'\'), $2) WHERE id = $1', [
+        user.id,
+        profile.name,
+      ]);
+      const refreshed = (await query('SELECT * FROM users WHERE id = $1', [user.id])).rows[0];
+      return respondAuthSuccess(res, rowToUser(refreshed), portal);
+    }
+
+    return respondAuthSuccess(res, user, portal);
+  } catch (err) {
+    console.error('[google auth]', err);
+    const status = err.status || 500;
+    res.status(status).json({
+      error: err.message || 'Google sign-in failed',
+      detail: devOtpEnabled() ? err.message : undefined,
+    });
+  }
+});
 
 router.post('/register', async (req, res) => {
   try {
@@ -289,17 +356,7 @@ router.post('/otp/verify', async (req, res) => {
     }
     await clearOtp(normalizedEmail, portal, dbReady);
 
-    const token = jwt.sign(
-      {
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-        portal,
-        providerCapable: user.provider_capable === true || user.providerCapable === true,
-      },
-      process.env.JWT_SECRET || 'dev-secret',
-      { expiresIn: '30d' },
-    );
+    const token = signAuthToken(user, portal);
 
     res.json({
       token,

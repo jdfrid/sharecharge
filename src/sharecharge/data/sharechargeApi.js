@@ -299,6 +299,27 @@ export async function verifyOtp(email, portal, code) {
   return data;
 }
 
+export async function fetchGoogleAuthConfig() {
+  try {
+    return await apiRequest('/auth/google/config');
+  } catch {
+    return { enabled: false, clientId: '' };
+  }
+}
+
+export async function googleSignIn(portal, idToken) {
+  const data = await apiRequest('/auth/google', {
+    method: 'POST',
+    body: { portal, idToken },
+  });
+  if (data.token) setStoredToken(portal, data.token);
+  return data;
+}
+
+export function getGoogleClientIdFromEnv() {
+  return (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+}
+
 export async function fetchState(portal) {
   return apiRequest('/ops/state', { portal });
 }
