@@ -60,7 +60,11 @@ router.post('/me/become-provider', authRequired, requireRole('driver'), async (r
     }
 
     const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.sub]);
-    const user = userRows[0];
+    let user = userRows[0];
+    if (!user && req.user.email) {
+      const byEmail = await query('SELECT * FROM users WHERE email = $1', [req.user.email.toLowerCase()]);
+      user = byEmail.rows[0];
+    }
     if (!user || user.role !== 'driver') {
       return res.status(403).json({ error: 'forbidden', detail: 'רק לקוחות יכולים להפוך לספק' });
     }

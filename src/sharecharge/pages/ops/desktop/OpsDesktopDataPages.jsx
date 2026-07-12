@@ -3,11 +3,12 @@ import { useShareCharge } from '../../../context/ShareChargeContext';
 import { shortTime } from '../../../utils';
 import { serviceCategoryLabel } from '../../../utils/serviceCategories';
 import { statusLabels, tenderStatusLabels } from '../../../constants';
-import { AdminTable, AddButton, PageHeader, RowActions } from './OpsAdminUi';
+import { AdminTable, AddButton, BulkDeleteBar, PageHeader, RowActions, useBulkSelection } from './OpsAdminUi';
 import { OpsCrudModal } from './OpsCrudModal';
 import {
   bidEditSchema,
   bookingEditSchema,
+  buildStationHostOptions,
   buildStationOptions,
   buildUserOptions,
   serializeFormValues,
@@ -26,6 +27,27 @@ function useCrudModal() {
   const openEdit = (config) => setModal({ mode: 'edit', ...config });
   const openCreate = (config) => setModal({ mode: 'create', ...config });
   return { modal, close, openEdit, openCreate };
+}
+
+function useBulkDelete(deleteAdminEntity, entityType, extraId) {
+  const [busy, setBusy] = useState(false);
+
+  const removeMany = async (ids, clear) => {
+    if (!ids.length) return;
+    if (!window.confirm(`למחוק ${ids.length} פריטים לצמיתות?`)) return;
+    setBusy(true);
+    try {
+      for (const id of ids) {
+        if (entityType === 'bid') await deleteAdminEntity('bid', id, extraId);
+        else await deleteAdminEntity(entityType, id);
+      }
+      clear();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { busy, removeMany };
 }
 
 export function OpsDesktopUsersPage() {
@@ -50,6 +72,9 @@ export function OpsDesktopUsersPage() {
       .filter((user) => !q || user.name?.toLowerCase().includes(q) || user.email?.toLowerCase().includes(q))
       .map((user) => ({ ...user, roleLabel: roleLabel[user.role] || user.role }));
   }, [state.users, roleFilter, query]);
+
+  const bulk = useBulkSelection(rows, { canSelect: (row) => row.role !== 'admin' });
+  const { busy: bulkBusy, removeMany } = useBulkDelete(deleteAdminEntity, 'user');
 
   const run = async (fn) => {
     setError('');
@@ -97,7 +122,22 @@ export function OpsDesktopUsersPage() {
         </select>
       </PageHeader>
       {error ? <p className="mb-4 rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-700">{error}</p> : null}
+      <BulkDeleteBar
+        selectedCount={bulk.selected.size}
+        busy={bulkBusy}
+        onDelete={() =>
+          run(() => removeMany([...bulk.selected], bulk.clear)).catch((err) =>
+            setError(err?.message || 'מחיקה מרובה נכשלה'),
+          )
+        }
+      />
       <AdminTable
+        selectable
+        selected={bulk.selected}
+        onToggle={bulk.toggle}
+        onToggleAll={bulk.toggleAll}
+        allSelected={bulk.allSelected}
+        canSelect={(row) => row.role !== 'admin'}
         columns={[
           { key: 'name', label: 'שם' },
           { key: 'email', label: 'אימייל' },
@@ -150,7 +190,9 @@ export function OpsDesktopStationsPage() {
   const { state, deleteAdminEntity, updateAdminEntity, createAdminEntity } = useShareCharge();
   const [error, setError] = useState('');
   const { modal, close, openEdit, openCreate } = useCrudModal();
-  const hostOptions = useMemo(() => buildUserOptions(state.users, 'host'), [state.users]);
+  const hostOptions = useMemo(() => buildStationHostOptions(state.users), [state.users]);
+  const bulk = useBulkSelection(state.stations);
+  const { busy: bulkBusy, removeMany } = useBulkDelete(deleteAdminEntity, 'station');
 
   const hostName = (id) => state.users.find((u) => u.id === id)?.name || id;
 
@@ -177,13 +219,30 @@ export function OpsDesktopStationsPage() {
                 serviceCategory: 'charging',
                 hostId: hostOptions[0]?.value || '',
               }),
-              onSave: (payload) => run(() => createAdminEntity('station', payload)),
+              onSave: (payload) => {
+                if (!payload.hostId) throw new Error('יש לבחור ספק לעמדה');
+                return run(() => createAdminEntity('station', payload));
+              },
             })
           }
         />
       </PageHeader>
       {error ? <p className="mb-4 rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-700">{error}</p> : null}
+      <BulkDeleteBar
+        selectedCount={bulk.selected.size}
+        busy={bulkBusy}
+        onDelete={() =>
+          run(() => removeMany([...bulk.selected], bulk.clear)).catch((err) =>
+            setError(err?.message || 'מחיקה מרובה נכשלה'),
+          )
+        }
+      />
       <AdminTable
+        selectable
+        selected={bulk.selected}
+        onToggle={bulk.toggle}
+        onToggleAll={bulk.toggleAll}
+        allSelected={bulk.allSelected}
         columns={[
           { key: 'name', label: 'שם' },
           { key: 'address', label: 'כתובת' },
@@ -232,6 +291,8 @@ export function OpsDesktopBookingsPage() {
   const { modal, close, openEdit } = useCrudModal();
   const stationOptions = useMemo(() => buildStationOptions(state.stations), [state.stations]);
   const userOptions = useMemo(() => buildUserOptions(state.users), [state.users]);
+  const bulk = useBulkSelection(state.bookings);
+  const { busy: bulkBusy, removeMany } = useBulkDelete(deleteAdminEntity, 'booking');
 
   const stationName = (id) => state.stations.find((s) => s.id === id)?.name || id;
 
@@ -252,7 +313,21 @@ export function OpsDesktopBookingsPage() {
         subtitle="עריכת סטטוס — לשחרור תקלות (למשל ביטול או סימון כהושלם)."
       />
       {error ? <p className="mb-4 rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-700">{error}</p> : null}
+      <BulkDeleteBar
+        selectedCount={bulk.selected.size}
+        busy={bulkBusy}
+        onDelete={() =>
+          run(() => removeMany([...bulk.selected], bulk.clear)).catch((err) =>
+            setError(err?.message || 'מחיקה מרובה נכשלה'),
+          )
+        }
+      />
       <AdminTable
+        selectable
+        selected={bulk.selected}
+        onToggle={bulk.toggle}
+        onToggleAll={bulk.toggleAll}
+        allSelected={bulk.allSelected}
         columns={[
           { key: 'id', label: 'מזהה', render: (row) => row.id.slice(0, 12) },
           { key: 'stationId', label: 'עמדה', render: (row) => stationName(row.stationId) },
@@ -297,8 +372,12 @@ export function OpsDesktopTendersPage() {
   const [expandedId, setExpandedId] = useState('');
   const { modal, close, openEdit } = useCrudModal();
   const userOptions = useMemo(() => buildUserOptions(state.users), [state.users]);
-
   const bidsFor = (requestId) => state.serviceBids.filter((b) => b.requestId === requestId);
+  const bulk = useBulkSelection(state.serviceRequests);
+  const { busy: bulkBusy, removeMany } = useBulkDelete(deleteAdminEntity, 'tender');
+  const bidRows = bidsFor(expandedId);
+  const bidBulk = useBulkSelection(bidRows);
+  const { busy: bidBulkBusy, removeMany: removeManyBids } = useBulkDelete(deleteAdminEntity, 'bid', expandedId);
 
   const run = async (fn) => {
     setError('');
@@ -319,7 +398,21 @@ export function OpsDesktopTendersPage() {
         subtitle="עריכת סטטוס וקריאות תקועות — כולל ניהול הצעות מחיר."
       />
       {error ? <p className="mb-4 rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-700">{error}</p> : null}
+      <BulkDeleteBar
+        selectedCount={bulk.selected.size}
+        busy={bulkBusy}
+        onDelete={() =>
+          run(() => removeMany([...bulk.selected], bulk.clear)).catch((err) =>
+            setError(err?.message || 'מחיקה מרובה נכשלה'),
+          )
+        }
+      />
       <AdminTable
+        selectable
+        selected={bulk.selected}
+        onToggle={bulk.toggle}
+        onToggleAll={bulk.toggleAll}
+        allSelected={bulk.allSelected}
         columns={[
           { key: 'id', label: 'מזהה', render: (row) => row.id.slice(0, 12) },
           {
@@ -369,9 +462,23 @@ export function OpsDesktopTendersPage() {
       {expandedId ? (
         <div className="mt-4 rounded-2xl border border-[var(--sc-border)] bg-white p-4 shadow-sm">
           <h4 className="mb-3 font-black text-sc-text">הצעות לקריאה {expandedId.slice(0, 12)}</h4>
+          <BulkDeleteBar
+            selectedCount={bidBulk.selected.size}
+            busy={bidBulkBusy}
+            onDelete={() =>
+              run(() => removeManyBids([...bidBulk.selected], bidBulk.clear)).catch((err) =>
+                setError(err?.message || 'מחיקה מרובה נכשלה'),
+              )
+            }
+          />
           <AdminTable
+            selectable
+            selected={bidBulk.selected}
+            onToggle={bidBulk.toggle}
+            onToggleAll={bidBulk.toggleAll}
+            allSelected={bidBulk.allSelected}
             emptyText="אין הצעות לקריאה זו"
-            rows={bidsFor(expandedId)}
+            rows={bidRows}
             columns={[
               { key: 'id', label: 'מזהה', render: (row) => row.id.slice(0, 10) },
               { key: 'hostId', label: 'ספק', render: (row) => hostName(row.hostId) },

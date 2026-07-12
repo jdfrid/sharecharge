@@ -161,7 +161,18 @@ router.post('/stations', authRequired, requireRole('admin'), async (req, res) =>
   try {
     const d = req.body || {};
     if (!d.name?.trim() || !d.address?.trim() || !d.hostId) {
-      return res.status(400).json({ error: 'Invalid station data' });
+      return res.status(400).json({ error: 'Invalid station data', detail: 'יש למלא שם, כתובת וספק' });
+    }
+    const { rows: hostRows } = await query('SELECT * FROM users WHERE id = $1', [d.hostId]);
+    if (!hostRows[0]) {
+      return res.status(400).json({ error: 'Invalid station data', detail: 'הספק שנבחר לא נמצא במערכת' });
+    }
+    const host = hostRows[0];
+    if (host.role !== 'host' && !host.provider_capable) {
+      return res.status(400).json({
+        error: 'Invalid station data',
+        detail: 'המשתמש שנבחר אינו מורשה לנהל עמדה — בחרו ספק או לקוח שהפך לספק',
+      });
     }
     const id = createId('station');
     const serviceCategory = normalizeStationCategory(d.serviceCategory);

@@ -1,5 +1,53 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+
+export function BulkDeleteBar({ selectedCount, onDelete, busy, label = 'מחק נבחרים' }) {
+  if (!selectedCount) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+      <span className="text-sm font-black text-red-800">{selectedCount} נבחרו</span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onDelete}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--sc-danger)] px-3 py-1.5 text-xs font-black text-white disabled:opacity-60"
+      >
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+        {label}
+      </button>
+    </div>
+  );
+}
+
+export function useBulkSelection(rows, { canSelect = () => true } = {}) {
+  const selectableIds = useMemo(
+    () => rows.filter((row) => canSelect(row)).map((row) => row.id),
+    [rows, canSelect],
+  );
+  const [selected, setSelected] = useState(() => new Set());
+
+  const toggle = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected((prev) => {
+      if (prev.size === selectableIds.length && selectableIds.length) return new Set();
+      return new Set(selectableIds);
+    });
+  };
+
+  const clear = () => setSelected(new Set());
+
+  const allSelected = selectableIds.length > 0 && selected.size === selectableIds.length;
+
+  return { selected, toggle, toggleAll, clear, allSelected, selectableIds };
+}
 
 export function EditButton({ onClick, label = 'ערוך' }) {
   return (
@@ -77,7 +125,17 @@ export function ConfirmDeleteButton({ label, confirmText, onConfirm, disabled })
   );
 }
 
-export function AdminTable({ columns, rows, emptyText = 'אין נתונים' }) {
+export function AdminTable({
+  columns,
+  rows,
+  emptyText = 'אין נתונים',
+  selectable = false,
+  selected = new Set(),
+  onToggle,
+  onToggleAll,
+  allSelected = false,
+  canSelect = () => true,
+}) {
   if (!rows.length) {
     return (
       <div className="rounded-2xl border border-dashed border-[var(--sc-border)] bg-white px-4 py-10 text-center text-sm font-bold text-sc-muted">
@@ -92,6 +150,16 @@ export function AdminTable({ columns, rows, emptyText = 'אין נתונים' })
         <table className="min-w-full text-right text-sm">
           <thead className="bg-sc-surface/80 text-[11px] font-black uppercase tracking-wide text-sc-muted">
             <tr>
+              {selectable ? (
+                <th className="whitespace-nowrap px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={onToggleAll}
+                    aria-label="בחר הכל"
+                  />
+                </th>
+              ) : null}
               {columns.map((col) => (
                 <th key={col.key} className="whitespace-nowrap px-4 py-3">
                   {col.label}
@@ -100,15 +168,32 @@ export function AdminTable({ columns, rows, emptyText = 'אין נתונים' })
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--sc-border)]">
-            {rows.map((row) => (
-              <tr key={row.id} className="hover:bg-sc-surface/40">
-                {columns.map((col) => (
-                  <td key={col.key} className="whitespace-nowrap px-4 py-3 font-bold text-sc-text">
-                    {col.render ? col.render(row) : row[col.key]}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const rowSelectable = selectable && canSelect(row);
+              return (
+                <tr key={row.id} className="hover:bg-sc-surface/40">
+                  {selectable ? (
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {rowSelectable ? (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(row.id)}
+                          onChange={() => onToggle(row.id)}
+                          aria-label={`בחר ${row.id}`}
+                        />
+                      ) : (
+                        <span className="text-sc-muted">—</span>
+                      )}
+                    </td>
+                  ) : null}
+                  {columns.map((col) => (
+                    <td key={col.key} className="whitespace-nowrap px-4 py-3 font-bold text-sc-text">
+                      {col.render ? col.render(row) : row[col.key]}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

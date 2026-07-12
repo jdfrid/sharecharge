@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Store, Zap } from 'lucide-react';
+import { ChevronRight, Store, Zap } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { resolveDriverIdForSession } from '../../auth/identity';
 import { PLUG_OPTIONS } from '../../utils/vehicleProfile';
@@ -42,6 +42,24 @@ export function ClientBecomeProviderPage() {
   const handleSubmit = async () => {
     setError('');
     setNotice('');
+    if (!businessName.trim()) {
+      setError('יש להזין שם עסק / שם מלא');
+      return;
+    }
+    if (providerType === 'sos' && !serviceCategories.length) {
+      setError('יש לבחור לפחות סוג שירות אחד');
+      return;
+    }
+    if (providerType === 'charging') {
+      if (!stationName.trim()) {
+        setError('יש להזין שם עמדת טעינה');
+        return;
+      }
+      if (!address.trim()) {
+        setError('יש להזין כתובת עמדה');
+        return;
+      }
+    }
     setBusy(true);
     try {
       const data = await becomeProvider({
@@ -70,13 +88,14 @@ export function ClientBecomeProviderPage() {
 
   return (
     <>
-      <Link
-        to="/client/home"
+      <button
+        type="button"
+        onClick={() => navigate('/client/home')}
         className="mb-2 inline-flex items-center gap-1 rounded-full border border-sc-border bg-white px-3 py-2 text-sm font-black text-[var(--sc-accent)]"
       >
-        <ChevronLeft size={18} />
-        בית
-      </Link>
+        <ChevronRight size={18} />
+        חזרה לבית
+      </button>
 
       <Card>
         <h1 className="text-xl font-black text-[var(--sc-accent)]">הפוך לספק</h1>

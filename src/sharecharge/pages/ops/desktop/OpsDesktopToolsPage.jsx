@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import { useShareCharge } from '../../../context/ShareChargeContext';
 import { shortTime } from '../../../utils';
-import { AdminTable, PageHeader, RowActions } from './OpsAdminUi';
+import { AdminTable, BulkDeleteBar, PageHeader, RowActions, useBulkSelection } from './OpsAdminUi';
 import { OpsCrudModal } from './OpsCrudModal';
 import {
   buildUserOptions,
@@ -19,6 +19,24 @@ export function OpsDesktopToolsPage() {
   const [message, setMessage] = useState('');
   const [modal, setModal] = useState(null);
   const userOptions = useMemo(() => buildUserOptions(state.users), [state.users]);
+  const disputeBulk = useBulkSelection(state.disputes);
+  const paymentBulk = useBulkSelection(state.payments || []);
+  const [bulkBusy, setBulkBusy] = useState('');
+
+  const removeMany = async (entityType, ids, clear) => {
+    if (!ids.length) return;
+    if (!window.confirm(`למחוק ${ids.length} פריטים לצמיתות?`)) return;
+    setBulkBusy(entityType);
+    setError('');
+    try {
+      for (const id of ids) await deleteAdminEntity(entityType, id);
+      clear();
+    } catch (err) {
+      setError(err?.message || 'מחיקה מרובה נכשלה');
+    } finally {
+      setBulkBusy('');
+    }
+  };
 
   const run = async (key, fn, successText) => {
     setBusy(key);
@@ -137,7 +155,17 @@ export function OpsDesktopToolsPage() {
 
       <div className="mt-8">
         <h3 className="mb-3 font-black text-sc-text">מחלוקות</h3>
+        <BulkDeleteBar
+          selectedCount={disputeBulk.selected.size}
+          busy={bulkBusy === 'dispute'}
+          onDelete={() => removeMany('dispute', [...disputeBulk.selected], disputeBulk.clear)}
+        />
         <AdminTable
+          selectable
+          selected={disputeBulk.selected}
+          onToggle={disputeBulk.toggle}
+          onToggleAll={disputeBulk.toggleAll}
+          allSelected={disputeBulk.allSelected}
           columns={[
             { key: 'id', label: 'מזהה', render: (row) => row.id.slice(0, 10) },
             { key: 'reason', label: 'סיבה' },
@@ -169,7 +197,17 @@ export function OpsDesktopToolsPage() {
 
       <div className="mt-8">
         <h3 className="mb-3 font-black text-sc-text">תשלומים</h3>
+        <BulkDeleteBar
+          selectedCount={paymentBulk.selected.size}
+          busy={bulkBusy === 'payment'}
+          onDelete={() => removeMany('payment', [...paymentBulk.selected], paymentBulk.clear)}
+        />
         <AdminTable
+          selectable
+          selected={paymentBulk.selected}
+          onToggle={paymentBulk.toggle}
+          onToggleAll={paymentBulk.toggleAll}
+          allSelected={paymentBulk.allSelected}
           columns={[
             { key: 'id', label: 'מזהה', render: (row) => row.id.slice(0, 10) },
             { key: 'title', label: 'תיאור' },

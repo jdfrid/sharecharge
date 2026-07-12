@@ -19,6 +19,7 @@ import { getAppEntryPath, getShareChargeApp, isSingleAppBuild } from '../../conf
 const homeLink = () => (isSingleAppBuild() ? getAppEntryPath() : '/sharecharge');
 
 function clientMeta(path) {
+  if (path.includes('/become-provider')) return { title: 'הפוך לספק', subtitle: 'הרשמה עצמית כספק SOS או עמדת טעינה' };
   if (path.includes('/activity')) return { title: 'ההזמנות שלי', subtitle: 'מעקב · OTP · קבלות' };
   if (path.includes('/charging/map')) return { title: 'עמדות טעינה', subtitle: 'מפה ורשימה לפי GPS' };
   if (path.includes('/charging/')) return { title: 'הזמנת עמדה', subtitle: 'פרטים ואישור' };

@@ -136,6 +136,16 @@ export function buildUserOptions(users = [], role) {
     .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` }));
 }
 
+/** ספקים לעמדות — כולל לקוחות שהפכו לספק (providerCapable) */
+export function buildStationHostOptions(users = []) {
+  return users
+    .filter((u) => u.role === 'host' || u.providerCapable)
+    .map((u) => ({
+      value: u.id,
+      label: `${u.name} (${u.email})${u.role === 'driver' ? ' · לקוח-ספק' : ''}`,
+    }));
+}
+
 export function buildStationOptions(stations = []) {
   return stations.map((s) => ({ value: s.id, label: `${s.name} — ${s.address}` }));
 }
