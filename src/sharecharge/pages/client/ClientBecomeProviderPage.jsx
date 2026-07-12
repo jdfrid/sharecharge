@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Store, Zap } from 'lucide-react';
 import { useShareCharge } from '../../context/ShareChargeContext';
 import { resolveDriverIdForSession } from '../../auth/identity';
-import { PLUG_OPTIONS } from '../../utils/vehicleProfile';
 import { Card } from '../../components/ui/Card';
+
+const STATION_PLUG_OPTIONS = ['Type 2', 'CCS', 'CHAdeMO'];
 
 const SOS_OPTIONS = [
   { id: 'fuel', label: 'דלק' },
@@ -26,7 +27,7 @@ export function ClientBecomeProviderPage() {
   const [stationName, setStationName] = useState('');
   const [address, setAddress] = useState('');
   const [power, setPower] = useState('11');
-  const [plug, setPlug] = useState('station');
+  const [plug, setPlug] = useState('Type 2');
   const [pricePerKwh, setPricePerKwh] = useState('1.25');
   const [termsText, setTermsText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -199,8 +200,8 @@ export function ClientBecomeProviderPage() {
                 <label className="mt-2 block text-xs font-bold text-sc-muted">
                   סוג מחבר
                   <select value={plug} onChange={(e) => setPlug(e.target.value)} className="sc-field text-sm">
-                    {PLUG_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>{opt.label}</option>
+                    {STATION_PLUG_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
                 </label>

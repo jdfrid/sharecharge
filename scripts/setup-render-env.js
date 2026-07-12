@@ -42,7 +42,7 @@ async function main() {
 
   for (const flavor of flavors) {
     const file = path.join(root, `.env.${flavor}.local`);
-    const content = `VITE_SHARECHARGE_DATA_MODE=api\nVITE_SHARECHARGE_APP=${flavor}\nVITE_SHARECHARGE_API_URL=${rawUrl}\n${process.env.GOOGLE_CLIENT_ID ? `VITE_GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID.split(',')[0].trim()}\n` : ''}`;
+    const content = `VITE_SHARECHARGE_DATA_MODE=api\nVITE_SHARECHARGE_APP=${flavor}\nVITE_SHARECHARGE_API_URL=${rawUrl}\n`;
     fs.writeFileSync(file, content);
   }
 

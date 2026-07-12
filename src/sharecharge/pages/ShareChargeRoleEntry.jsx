@@ -267,7 +267,7 @@ export function ShareChargeRoleEntry({ portal }) {
             <img src="./sharecharge-logo.png" alt="" className="h-full w-full object-cover opacity-95" />
             <div className="absolute inset-x-4 bottom-3 rounded-sc-sm border border-sc-border bg-white px-4 py-3 shadow-sm">
               <p className="text-sm font-black text-sc-text">{config.title}</p>
-              <p className="text-xs font-bold text-sc-muted">הזדהות במייל · OTP</p>
+              <p className="text-xs font-bold text-sc-muted">הזדהות לפי מייל וקוד חד-פעמי</p>
             </div>
           </div>
 
