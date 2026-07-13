@@ -14,8 +14,8 @@ const flavors = {
   client: { appId: 'com.sharecharge.client', appName: 'ShareCharge לקוח' },
   provider: { appId: 'com.sharecharge.provider', appName: 'ShareCharge ספק' },
   ops: { appId: 'com.sharecharge.ops', appName: 'ShareCharge ניהול' },
+  dual: { appId: 'com.sharecharge.dual', appName: 'ShareCharge לקוח+ספק' },
 };
-
 const meta = flavors[flavor] || flavors.client;
 const configPath = path.join(root, 'capacitor.config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));

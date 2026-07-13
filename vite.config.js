@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const nativeModes = new Set(['client', 'provider', 'ops']);
+const nativeModes = new Set(['client', 'provider', 'ops', 'dual']);
 
 export default defineConfig(({ mode }) => {
   const isNativeApp = nativeModes.has(mode);

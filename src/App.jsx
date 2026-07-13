@@ -83,8 +83,8 @@ function ProtectedRoute({ children, roles }) {
 /** Must be invoked as {shareChargeRouteElements()} — not a <Component /> (React Router rejects that). */
 function shareChargeRouteElements() {
   const app = getShareChargeApp();
-  const showClient = app === 'all' || app === 'client';
-  const showProvider = app === 'all' || app === 'provider';
+  const showClient = app === 'all' || app === 'client' || app === 'dual';
+  const showProvider = app === 'all' || app === 'provider' || app === 'dual';
   const showOps = app === 'all' || app === 'ops';
 
   return (

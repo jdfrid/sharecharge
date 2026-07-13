@@ -82,7 +82,7 @@ async function main() {
   const ipArg = process.argv.slice(2).find((arg) => !arg.startsWith('--') && /^\d+\.\d+\.\d+\.\d+$/.test(arg));
   const ip = ipArg || detectLanIp();
   const apiUrl = `http://${ip}:${port}`;
-  const flavors = ['client', 'provider', 'ops'];
+  const flavors = ['client', 'provider', 'ops', 'dual'];
 
   const apiUp = await probeHealth(ip);
   const dataMode = forceApi ? (apiUp ? 'api' : 'local') : apiUp ? 'api' : 'local';

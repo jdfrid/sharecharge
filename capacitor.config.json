@@ -1,6 +1,6 @@
 {
-  "appId": "com.sharecharge.client",
-  "appName": "ShareCharge לקוח",
+  "appId": "com.sharecharge.dual",
+  "appName": "ShareCharge לקוח+ספק",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",

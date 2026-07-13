@@ -5,6 +5,7 @@ const FLAVOR_BY_APP_ID = {
   'com.sharecharge.client': 'client',
   'com.sharecharge.provider': 'provider',
   'com.sharecharge.ops': 'ops',
+  'com.sharecharge.dual': 'dual',
 };
 
 /** Reads Android/iOS bundle id so each APK gets the correct role even with shared web assets. */

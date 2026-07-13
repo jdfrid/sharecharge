@@ -5,6 +5,7 @@ import { SHARECHARGE_ROLE_KEYS } from './sharecharge/constants';
 import { getAppEntryPath, getShareChargeApp } from './sharecharge/config/appConfig';
 import { ShareChargeRoleEntry } from './sharecharge/pages/ShareChargeRoleEntry';
 import { ClientShell, OpsShell, ProviderShell } from './sharecharge/pages/shells/AppShells';
+import { DualShell } from './sharecharge/pages/shells/DualShell';
 import { ClientHomePage } from './sharecharge/pages/client/ClientHomePage';
 import { ClientInlineAuth } from './sharecharge/pages/client/ClientInlineAuth';
 import { ClientChargingMapPage } from './sharecharge/pages/client/ClientChargingMapPage';
@@ -29,54 +30,69 @@ import { ProviderTendersPage } from './sharecharge/pages/provider/ProviderTender
 import { OpsDashboardPage } from './sharecharge/pages/ops/OpsDashboardPage';
 import { OpsPaymentsPage } from './sharecharge/pages/ops/OpsPaymentsPage';
 
+function clientRouteTree() {
+  return (
+    <>
+      <Route path="/client/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.client} />} />
+      <Route element={<ClientShell />}>
+        <Route path="/client" element={<Navigate to="/client/home" replace />} />
+        <Route path="/client/home" element={<ClientHomePage />} />
+        <Route path="/client/auth" element={<ClientInlineAuth />} />
+        <Route path="/client/discover" element={<Navigate to="/client/charging/map" replace />} />
+        <Route path="/client/charging/map" element={<ClientChargingMapPage />} />
+        <Route path="/client/charging/:stationId" element={<ClientStationPage />} />
+        <Route path="/client/station/:stationId" element={<ClientStationRedirect />} />
+        <Route path="/client/emergency" element={<ClientEmergencyPage />} />
+        <Route path="/client/services/:category" element={<ClientServiceBrowsePage />} />
+        <Route path="/client/services/:category/:stationId" element={<ClientServiceBookPage />} />
+        <Route element={<ClientGate />}>
+          <Route path="/client/activity" element={<ClientActivityPage />} />
+          <Route path="/client/become-provider" element={<ClientBecomeProviderPage />} />
+          <Route path="/client/navigate/:bookingId" element={<ClientNavigatePage />} />
+          <Route path="/client/tender/:id/offers" element={<ClientTenderOffersPage />} />
+          <Route path="/client/track/:id" element={<ClientTrackPage />} />
+          <Route path="/client/receipt/:id" element={<ClientReceiptPage />} />
+          <Route path="/client/payment/return" element={<ClientPaymentReturnPage />} />
+          <Route path="/client/payment/:refType/:refId" element={<ClientPaymentPage />} />
+          <Route path="/client/payments" element={<ClientPaymentsHubPage />} />
+        </Route>
+      </Route>
+    </>
+  );
+}
+
+function providerRouteTree() {
+  return (
+    <>
+      <Route path="/provider/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.provider} />} />
+      <Route element={<ProviderGate />}>
+        <Route element={<ProviderShell />}>
+          <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
+          <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
+          <Route path="/provider/orders" element={<ProviderOrdersPage />} />
+          <Route path="/provider/tenders" element={<ProviderTendersPage />} />
+          <Route path="/provider/transactions" element={<ProviderTransactionsPage />} />
+          <Route path="/provider/payments" element={<ProviderPaymentsPage />} />
+        </Route>
+      </Route>
+    </>
+  );
+}
+
 function nativeRouteElements() {
   const app = getShareChargeApp();
 
   return (
     <>
-      {app === 'client' && (
-        <>
-          <Route path="/client/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.client} />} />
-          <Route element={<ClientShell />}>
-            <Route path="/client" element={<Navigate to="/client/home" replace />} />
-            <Route path="/client/home" element={<ClientHomePage />} />
-            <Route path="/client/auth" element={<ClientInlineAuth />} />
-            <Route path="/client/discover" element={<Navigate to="/client/charging/map" replace />} />
-            <Route path="/client/charging/map" element={<ClientChargingMapPage />} />
-            <Route path="/client/charging/:stationId" element={<ClientStationPage />} />
-            <Route path="/client/station/:stationId" element={<ClientStationRedirect />} />
-            <Route path="/client/emergency" element={<ClientEmergencyPage />} />
-            <Route path="/client/services/:category" element={<ClientServiceBrowsePage />} />
-            <Route path="/client/services/:category/:stationId" element={<ClientServiceBookPage />} />
-            <Route element={<ClientGate />}>
-              <Route path="/client/activity" element={<ClientActivityPage />} />
-              <Route path="/client/become-provider" element={<ClientBecomeProviderPage />} />
-              <Route path="/client/navigate/:bookingId" element={<ClientNavigatePage />} />
-              <Route path="/client/tender/:id/offers" element={<ClientTenderOffersPage />} />
-              <Route path="/client/track/:id" element={<ClientTrackPage />} />
-              <Route path="/client/receipt/:id" element={<ClientReceiptPage />} />
-              <Route path="/client/payment/return" element={<ClientPaymentReturnPage />} />
-              <Route path="/client/payment/:refType/:refId" element={<ClientPaymentPage />} />
-              <Route path="/client/payments" element={<ClientPaymentsHubPage />} />
-            </Route>
-          </Route>
-        </>
-      )}
+      {app === 'client' && clientRouteTree()}
 
-      {app === 'provider' && (
-        <>
-          <Route path="/provider/entry" element={<ShareChargeRoleEntry portal={SHARECHARGE_ROLE_KEYS.provider} />} />
-          <Route element={<ProviderGate />}>
-            <Route element={<ProviderShell />}>
-              <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
-              <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
-              <Route path="/provider/orders" element={<ProviderOrdersPage />} />
-              <Route path="/provider/tenders" element={<ProviderTendersPage />} />
-              <Route path="/provider/transactions" element={<ProviderTransactionsPage />} />
-              <Route path="/provider/payments" element={<ProviderPaymentsPage />} />
-            </Route>
-          </Route>
-        </>
+      {app === 'provider' && providerRouteTree()}
+
+      {app === 'dual' && (
+        <Route element={<DualShell />}>
+          {clientRouteTree()}
+          {providerRouteTree()}
+        </Route>
       )}
 
       {app === 'ops' && (

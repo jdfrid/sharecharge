@@ -20,7 +20,13 @@ export function resolveApiPortal(location) {
   if (app === 'ops') return SHARECHARGE_ROLE_KEYS.system;
 
   const fromRoute = portalFromPath(location?.pathname, location?.hash);
-  if (fromRoute) return fromRoute;
+  if (app === 'dual') {
+    if (fromRoute === SHARECHARGE_ROLE_KEYS.provider || fromRoute === SHARECHARGE_ROLE_KEYS.client) {
+      return fromRoute;
+    }
+  } else if (fromRoute) {
+    return fromRoute;
+  }
 
   const sessions = loadAuthSessions();
   for (const portal of [

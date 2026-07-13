@@ -14,7 +14,9 @@ function usePortalGate(portal) {
     const allowed =
       (app === 'client' && portal === SHARECHARGE_ROLE_KEYS.client) ||
       (app === 'provider' && portal === SHARECHARGE_ROLE_KEYS.provider) ||
-      (app === 'ops' && portal === SHARECHARGE_ROLE_KEYS.system);
+      (app === 'ops' && portal === SHARECHARGE_ROLE_KEYS.system) ||
+      (app === 'dual' &&
+        (portal === SHARECHARGE_ROLE_KEYS.client || portal === SHARECHARGE_ROLE_KEYS.provider));
     if (!allowed) return 'blocked';
   }
 

@@ -14,9 +14,12 @@ import { useProviderEmergencyAlerts } from '../../hooks/useProviderEmergencyAler
 import { useProviderCounterBids } from '../../hooks/useProviderCounterBids';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { formatShareChargeApiError } from '../../data/sharechargeApi';
-import { getAppEntryPath, getShareChargeApp, isSingleAppBuild } from '../../config/appConfig';
+import { getAppEntryPath, getShareChargeApp, isDualAppBuild, isSingleAppBuild } from '../../config/appConfig';
 
-const homeLink = () => (isSingleAppBuild() ? getAppEntryPath() : '/sharecharge');
+const homeLink = () => {
+  if (isDualAppBuild()) return null;
+  return isSingleAppBuild() ? getAppEntryPath() : '/sharecharge';
+};
 
 function clientMeta(path) {
   if (path.includes('/become-provider')) return { title: 'הפוך לספק', subtitle: 'הרשמה עצמית כספק SOS או עמדת טעינה' };
@@ -47,6 +50,11 @@ export function ClientShell() {
   }, [syncSessionProfiles, authed]);
 
   const onExit = () => {
+    if (isDualAppBuild()) {
+      clearAuthSession('client');
+      navigate('/client/entry');
+      return;
+    }
     exitShareChargeApp('client').catch(() => {
       if (authed) clearAuthSession('client');
       navigate('/client/entry');
@@ -63,7 +71,8 @@ export function ClientShell() {
       title={meta.title}
       subtitle={meta.subtitle}
       onExit={onExit}
-      homeTo={homeLink()}
+      homeTo={homeLink() || '/client/home'}
+      showHomeLink={!isDualAppBuild()}
       bottomNav={[
         { to: '/client/home', label: 'בית', icon: Home, end: true },
         { to: '/client/activity', label: 'הזמנות', icon: CalendarClock },
@@ -95,14 +104,15 @@ function ProviderShellInner() {
   const { bidRequestId, bidError, setBidError, openBid, closeBid } = useProviderBid();
   const bidRequest = (state.serviceRequests || []).find((item) => item.id === bidRequestId);
 
-  usePushNotifications(getShareChargeApp() === 'provider');
+  usePushNotifications(getShareChargeApp() === 'provider' || isDualAppBuild());
 
   useEffect(() => {
     if (repositoryMode !== 'api') return undefined;
+    if (isDualAppBuild() && !path.startsWith('/provider')) return undefined;
     refreshFromApi();
     const id = setInterval(() => refreshFromApi(), 5000);
     return () => clearInterval(id);
-  }, [repositoryMode, refreshFromApi]);
+  }, [repositoryMode, refreshFromApi, path]);
 
   const meta = path.includes('/transactions')
     ? { title: 'עסקאות', subtitle: 'הכנסות ופירוט' }
@@ -115,6 +125,11 @@ function ProviderShellInner() {
         : { title: 'לוח ספק', subtitle: 'עמדות ומחירים' };
 
   const onExit = () => {
+    if (isDualAppBuild()) {
+      clearAuthSession('provider');
+      navigate('/provider/entry');
+      return;
+    }
     clearAuthSession('provider');
     navigate('/provider/entry');
   };
@@ -155,7 +170,8 @@ function ProviderShellInner() {
         title={meta.title}
         subtitle={meta.subtitle}
         onExit={onExit}
-        homeTo={homeLink()}
+        homeTo={homeLink() || '/provider/dashboard'}
+        showHomeLink={!isDualAppBuild()}
         bottomNav={[
           { to: '/provider/dashboard', label: 'ראשי', icon: LayoutGrid, end: true },
           { to: '/provider/orders', label: 'הזמנות', icon: ClipboardList },

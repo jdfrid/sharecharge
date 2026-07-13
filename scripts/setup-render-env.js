@@ -14,7 +14,7 @@ const root = path.join(__dirname, '..');
 
 const defaultUrl = process.env.RENDER_API_URL || 'https://sharecharge.onrender.com';
 const rawUrl = (process.argv[2] || defaultUrl).replace(/\/$/, '');
-const flavors = ['client', 'provider', 'ops'];
+const flavors = ['client', 'provider', 'ops', 'dual'];
 
 function probeHealth(baseUrl) {
   return new Promise((resolve) => {

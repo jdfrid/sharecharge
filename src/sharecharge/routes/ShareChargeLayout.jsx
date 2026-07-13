@@ -7,11 +7,15 @@ import { ClientIntroSplash, wasIntroSeen } from '../components/ClientIntroSplash
 import { SyncStatusBar } from '../components/SyncStatusBar';
 import { SessionExpiryRedirect } from './gates';
 import { usePushNotifications } from '../hooks/usePushNotifications';
-import { getShareChargeApp, isSingleAppBuild } from '../config/appConfig';
+import { getShareChargeApp, isDualAppBuild, isSingleAppBuild } from '../config/appConfig';
+import { portalFromPath } from '../auth/portal';
 import { SHARECHARGE_ROLE_KEYS } from '../constants';
 
-function portalForNativeApp() {
+function portalForNativeApp(pathname) {
   const app = getShareChargeApp();
+  if (app === 'dual') {
+    return portalFromPath(pathname) || SHARECHARGE_ROLE_KEYS.client;
+  }
   if (app === 'client') return SHARECHARGE_ROLE_KEYS.client;
   if (app === 'provider') return SHARECHARGE_ROLE_KEYS.provider;
   if (app === 'ops') return SHARECHARGE_ROLE_KEYS.system;
@@ -21,16 +25,18 @@ function portalForNativeApp() {
 export function ShareChargeLayout() {
   const location = useLocation();
   const isConsole = location.pathname.startsWith('/ops/console');
-  const isClient = getShareChargeApp() === 'client';
+  const app = getShareChargeApp();
+  const isClientFlow = app === 'client' || isDualAppBuild();
   const [bootDone, setBootDone] = useState(isConsole);
-  const [videoDone, setVideoDone] = useState(!isClient || isConsole);
-  const [introDone, setIntroDone] = useState(() => wasIntroSeen() || !isClient || isConsole);
+  const [videoDone, setVideoDone] = useState(!isClientFlow || isConsole);
+  const [introDone, setIntroDone] = useState(() => wasIntroSeen() || !isClientFlow || isConsole);
 
-  const showVideo = bootDone && !videoDone && isClient;
-  const showIntro = bootDone && videoDone && !introDone && isClient;
+  const showVideo = bootDone && !videoDone && isClientFlow;
+  const showIntro = bootDone && videoDone && !introDone && isClientFlow;
   const appReady = bootDone && videoDone && introDone;
+  const nativePortal = portalForNativeApp(location.pathname);
 
-  usePushNotifications(isClient && appReady);
+  usePushNotifications((app === 'client' || isDualAppBuild()) && appReady);
 
   return (
     <ShareChargeProvider>
@@ -40,8 +46,8 @@ export function ShareChargeLayout() {
       {appReady && (
         <>
           <SyncStatusBar />
-          {isSingleAppBuild() && portalForNativeApp() ? (
-            <SessionExpiryRedirect portal={portalForNativeApp()} />
+          {isSingleAppBuild() && nativePortal ? (
+            <SessionExpiryRedirect portal={nativePortal} />
           ) : null}
           <Outlet />
         </>

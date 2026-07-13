@@ -1,5 +1,8 @@
 import { Link, NavLink } from 'react-router-dom';
+import { useState } from 'react';
 import { Bell, User, X, Zap } from 'lucide-react';
+import { NotificationSettingsSheet } from '../NotificationSettingsSheet';
+import { areNotificationsMuted } from '../../utils/notificationMute';
 const heroSurface = {
   client: 'app-hero--client',
   provider: 'app-hero--provider',
@@ -23,12 +26,15 @@ export function MobileAppShell({
   bottomNav = [],
   actions,
   homeTo = '/sharecharge',
+  showHomeLink = true,
 }) {
   const hero = heroSurface[portal] || heroSurface.client;
   const isDarkHero = portal === 'system';
   const isBrandHero = portal === 'client' || portal === 'provider';
   const hasDock = bottomNav.length > 0;
   const greeting = greetingForHour(new Date().getHours());
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+  const notificationsMuted = areNotificationsMuted();
 
   return (
     <div
@@ -74,26 +80,34 @@ export function MobileAppShell({
             }`}
           >
             <div className="flex shrink-0 items-center gap-2">
-              <Link
-                to={homeTo}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-                  isBrandHero
-                    ? 'bg-white/15 text-white ring-1 ring-white/20'
-                    : 'bg-gradient-to-br from-[#2563eb] via-[#0ea5e9] to-[#14b8a6] text-white shadow-sc-card'
-                }`}
-                aria-label="מסך בחירת אפליקציה"
-              >
-                <Zap size={22} />
-              </Link>
+              {showHomeLink ? (
+                <Link
+                  to={homeTo}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                    isBrandHero
+                      ? 'bg-white/15 text-white ring-1 ring-white/20'
+                      : 'bg-gradient-to-br from-[#2563eb] via-[#0ea5e9] to-[#14b8a6] text-white shadow-sc-card'
+                  }`}
+                  aria-label="מסך בחירת אפליקציה"
+                >
+                  <Zap size={22} />
+                </Link>
+              ) : null}
               {actions}
               {isBrandHero && (
                 <>
                   <button
                     type="button"
-                    className="flex h-10 w-10 items-center justify-center rounded-2xl sc-hero-chip"
-                    aria-label="התראות"
+                    onClick={() => setShowNotifSettings(true)}
+                    className={`relative flex h-10 w-10 items-center justify-center rounded-2xl sc-hero-chip ${
+                      notificationsMuted ? 'opacity-60' : ''
+                    }`}
+                    aria-label="הגדרות התראות"
                   >
                     <Bell size={18} />
+                    {notificationsMuted ? (
+                      <span className="absolute -left-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-white/80" />
+                    ) : null}
                   </button>
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30">
                     <User size={18} className="text-white" />
@@ -174,6 +188,7 @@ export function MobileAppShell({
           </nav>
         )}
       </div>
+      {showNotifSettings ? <NotificationSettingsSheet onClose={() => setShowNotifSettings(false)} /> : null}
     </div>
   );
 }

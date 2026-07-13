@@ -6,6 +6,7 @@ const flavorMeta = {
   client: { label: 'לקוח', gradient: 'from-[#007bff] via-[#0095ff] to-[#00d1c1]' },
   provider: { label: 'ספק', gradient: 'from-sky-600 via-blue-600 to-teal-500' },
   ops: { label: 'ניהול', gradient: 'from-slate-900 via-blue-900 to-teal-700' },
+  dual: { label: 'לקוח + ספק', gradient: 'from-[#007bff] via-[#6366f1] to-[#14b8a6]' },
   all: { label: 'ShareCharge', gradient: 'from-[#007bff] via-[#0095ff] to-[#00d1c1]' },
 };
 

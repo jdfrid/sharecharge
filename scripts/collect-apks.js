@@ -28,6 +28,11 @@ const maps = [
     ['app-ops-release.apk', 'app-ops-release-unsigned.apk'],
     'ShareCharge-ops.apk',
   ],
+  [
+    'android/app/build/outputs/apk/dual/release',
+    ['app-dual-release.apk', 'app-dual-release-unsigned.apk'],
+    'ShareCharge-dual.apk',
+  ],
 ];
 
 function findApk(dir, candidates) {

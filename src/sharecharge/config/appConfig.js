@@ -1,10 +1,10 @@
-/** @typedef {'all'|'client'|'provider'|'ops'} ShareChargeAppFlavor */
+/** @typedef {'all'|'client'|'provider'|'ops'|'dual'} ShareChargeAppFlavor */
 
 let _app = /** @type {ShareChargeAppFlavor} */ (import.meta.env.VITE_SHARECHARGE_APP || 'all');
 
 /** Set at boot from native applicationId (Capacitor) — fixes shared APK web assets. */
 export function initShareChargeApp(flavor) {
-  if (flavor === 'client' || flavor === 'provider' || flavor === 'ops' || flavor === 'all') {
+  if (flavor === 'client' || flavor === 'provider' || flavor === 'ops' || flavor === 'dual' || flavor === 'all') {
     _app = flavor;
   }
 }
@@ -24,6 +24,7 @@ const ENTRY_PATHS = {
   client: '/client/home',
   provider: '/provider/entry',
   ops: '/ops/entry',
+  dual: '/client/home',
   all: '/sharecharge',
 };
 
@@ -31,6 +32,7 @@ const AUTH_PATHS = {
   client: '/client/home',
   provider: '/provider/dashboard',
   ops: '/ops/dashboard',
+  dual: '/client/home',
   all: '/sharecharge',
 };
 
@@ -59,14 +61,22 @@ export function getAppLoginPath(portal) {
 /** @deprecated use getAppEntryPath() */
 export const appEntryPath = ENTRY_PATHS[_app] || '/sharecharge';
 
+export function isDualAppBuild() {
+  return getShareChargeApp() === 'dual';
+}
+
 const APP_TO_PORTAL = {
   client: 'client',
   provider: 'provider',
   ops: 'system',
+  dual: null,
 };
 
 export function flavorAllowsPortal(portal) {
   if (!isSingleAppBuild()) return true;
+  if (isDualAppBuild()) {
+    return portal === 'client' || portal === 'provider';
+  }
   return APP_TO_PORTAL[getShareChargeApp()] === portal;
 }
 
@@ -76,6 +86,7 @@ export function flavorLabel() {
       client: 'לקוח',
       provider: 'ספק',
       ops: 'ניהול',
+      dual: 'לקוח + ספק',
       all: 'ShareCharge',
     }[getShareChargeApp()] || 'ShareCharge'
   );

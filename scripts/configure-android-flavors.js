@@ -30,6 +30,11 @@ const FLAVOR_BLOCK = `
             applicationId "com.sharecharge.ops"
             resValue "string", "app_name", "ShareCharge ניהול"
         }
+        dual {
+            dimension "role"
+            applicationId "com.sharecharge.dual"
+            resValue "string", "app_name", "ShareCharge לקוח+ספק"
+        }
     }
 `;
 
