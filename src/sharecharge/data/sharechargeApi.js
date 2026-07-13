@@ -1,4 +1,4 @@
-const nativeModes = new Set(['client', 'provider', 'ops']);
+const nativeModes = new Set(['client', 'provider', 'ops', 'dual']);
 const DEFAULT_RENDER_API = 'https://sharecharge.onrender.com';
 
 import { clearAuthSession } from '../auth/session';
