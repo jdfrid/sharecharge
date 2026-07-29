@@ -5,5 +5,8 @@ android/.gradle/
 .env.*.local
 release/apk/*.apk
 release/install/*.apk
+release/play/*.aab
+android/keystore.properties
+android/*.jks
 server/node_modules
 dist/

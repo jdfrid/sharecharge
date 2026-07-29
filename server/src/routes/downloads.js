@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function loadCatalog() {
   try {
-    return JSON.parse(fs.readFileSync(path.join(__dirname, 'apk-catalog.json'), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'apk-catalog.json'), 'utf8'));
   } catch {
     return [];
   }

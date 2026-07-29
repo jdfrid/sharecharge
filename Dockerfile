@@ -16,6 +16,8 @@ COPY server/package.json server/package-lock.json* ./
 RUN npm install --omit=dev
 COPY server/ .
 COPY --from=web-build /app/dist ./public
+# APK binaries (commit public/downloads/*.apk or sync before docker build)
+COPY public/downloads ./public/downloads
 ENV NODE_ENV=production
 EXPOSE 3001
 CMD ["node", "src/index.js"]
