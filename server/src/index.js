@@ -12,7 +12,7 @@ import tenderRoutes from './routes/tenders.js';
 import geoRoutes from './routes/geo.js';
 import paymentRoutes from './routes/payments.js';
 import opsRoutes from './routes/ops.js';
-import { createDownloadsRouter } from './routes/downloads.js';
+import { createDownloadsRouter, isPublishedApk } from './routes/downloads.js';
 import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
 import { query } from './db/pool.js';
@@ -165,6 +165,22 @@ app.use('/api', (req, res) => {
 });
 
 if (hasPublic) {
+  app.get('/downloads/:filename', (req, res, next) => {
+    const { filename } = req.params;
+    if (!filename.endsWith('.apk')) return next();
+    if (!isPublishedApk(filename)) {
+      return res.status(404).type('text/plain; charset=utf-8').send('קובץ לא מפורסם להורדה');
+    }
+    const filePath = path.join(publicDir, 'downloads', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).type('text/plain; charset=utf-8').send('קובץ לא נמצא');
+    }
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.sendFile(filePath);
+  });
+
   app.use(
     express.static(publicDir, {
       index: 'index.html',

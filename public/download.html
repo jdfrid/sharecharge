@@ -163,9 +163,8 @@
           versionLine.innerHTML = `<span class="version-pill">גרסה ${data.version}</span>`;
         }
         const available = (data.downloads || []).filter((d) => d.available);
-        const unavailable = (data.downloads || []).filter((d) => !d.available);
-        if (!available.length && !unavailable.length) {
-          list.innerHTML = '<p class="empty">אין קבצי APK בשרת כרגע.</p>';
+        if (!available.length) {
+          list.innerHTML = '<p class="empty">אין גרסאות מפורסמות כרגע. מנהל המערכת יפרסם APK דרך apk-catalog.json.</p>';
           return;
         }
         const sos = available.filter((d) => d.group === 'sos');
@@ -178,11 +177,6 @@
         if (full.length) {
           html += '<div class="section-title">ShareCharge מלא — טעינה + חירום</div>';
           html += full.map(renderCard).join('');
-        }
-        const hidden = unavailable.filter((d) => !available.some((a) => a.file === d.file));
-        if (hidden.length) {
-          html += '<div class="section-title">בקרוב</div>';
-          html += hidden.map(renderCard).join('');
         }
         list.innerHTML = html;
       } catch (err) {

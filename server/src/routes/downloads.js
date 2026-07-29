@@ -13,12 +13,20 @@ function loadCatalog() {
   }
 }
 
+function publishedCatalog() {
+  return loadCatalog().filter((entry) => entry.published === true);
+}
+
+export function isPublishedApk(filename) {
+  return publishedCatalog().some((entry) => entry.file === filename);
+}
+
 export function createDownloadsRouter(publicDir) {
   const router = Router();
   const downloadsDir = path.join(publicDir, 'downloads');
 
   router.get('/', (_req, res) => {
-    const catalog = loadCatalog();
+    const catalog = publishedCatalog();
     let version = null;
     let builtAt = null;
 
