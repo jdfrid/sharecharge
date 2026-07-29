@@ -1,0 +1,45 @@
+[
+  {
+    "file": "ShareCharge-sos-dual.apk",
+    "title": "ShareCharge SOS — לקוח + ספק",
+    "description": "עזרה בדרך בחירום בלבד · פנצ'ר, דלק, גרר, מוסך",
+    "recommended": true,
+    "group": "sos"
+  },
+  {
+    "file": "ShareCharge-sos-client.apk",
+    "title": "ShareCharge SOS — לקוח",
+    "description": "קריאות חירום וקבלת הצעות מספקים",
+    "group": "sos"
+  },
+  {
+    "file": "ShareCharge-sos-provider.apk",
+    "title": "ShareCharge SOS — ספק",
+    "description": "קבלת קריאות חירום והגשת הצעות",
+    "group": "sos"
+  },
+  {
+    "file": "ShareCharge-dual.apk",
+    "title": "ShareCharge — לקוח + ספק",
+    "description": "טעינה חשמלית + שירותי חירום",
+    "group": "full"
+  },
+  {
+    "file": "ShareCharge-client.apk",
+    "title": "ShareCharge — לקוח",
+    "description": "טעינה + חירום · פורטל לקוח בלבד",
+    "group": "full"
+  },
+  {
+    "file": "ShareCharge-provider.apk",
+    "title": "ShareCharge — ספק",
+    "description": "ניהול עמדות והזמנות · פורטל ספק",
+    "group": "full"
+  },
+  {
+    "file": "ShareCharge-ops.apk",
+    "title": "ShareCharge — ניהול",
+    "description": "מנהל מערכת · ספקים, לקוחות, דוחות",
+    "group": "full"
+  }
+]

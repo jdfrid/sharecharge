@@ -9,6 +9,9 @@ import {
   deleteTenderMem,
   deleteUserMem,
   resetTestingDataMem,
+  approvePlatformMem,
+  rejectPlatformMem,
+  setRequireManagerApprovalMem,
   updateUserMem,
   updateStationMem,
   patchBookingMem,
@@ -249,12 +252,87 @@ router.patch('/settings/commission', authRequired, requireRole('admin'), async (
   try {
     const commission = Number(req.body?.commission);
     if (Number.isNaN(commission)) return res.status(400).json({ error: 'Invalid commission' });
-    await query('UPDATE settings SET commission = $1 WHERE id = 1', [commission]);
-    await addEvent(`עמלת המיזם עודכנה ל-${commission}%`);
+    if (dbReady(req)) {
+      await query('UPDATE settings SET commission = $1 WHERE id = 1', [commission]);
+    }
+    await addEvent(`עמלת המיזם עודכנה ל-${commission}%`, 'activity', dbReady(req));
     return respondWithState(res, dbReady(req));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+router.patch('/settings/require-manager-approval', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    const requireManagerApproval = !!req.body?.requireManagerApproval;
+    if (dbReady(req)) {
+      await query('UPDATE settings SET require_manager_approval = $1 WHERE id = 1', [requireManagerApproval]);
+    } else {
+      setRequireManagerApprovalMem(requireManagerApproval);
+    }
+    await addEvent(
+      requireManagerApproval ? 'אישור מנהל הופעל לעסקאות' : 'אישור מנהל בוטל — לקוח+ספק מספיקים',
+      'system',
+      dbReady(req),
+    );
+    return respondWithState(res, dbReady(req));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+router.post('/tenders/:id/approve-platform', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    if (!dbReady(req)) {
+      const result = approvePlatformMem(req.params.id);
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+      return respondWithState(res, false);
+    }
+    const { rows: reqRows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    const request = reqRows[0];
+    if (!request || request.status !== 'pending_platform') {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    await query(
+      "UPDATE service_requests SET status = 'assigned', platform_confirmed_at = $1 WHERE id = $2",
+      [Date.now(), req.params.id],
+    );
+    await addEvent('מנהל אישר את העסקה — יוצאים לדרך', 'activity', true);
+    return respondWithState(res, true);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Approve failed' });
+  }
+});
+
+router.post('/tenders/:id/reject-platform', authRequired, requireRole('admin'), async (req, res) => {
+  try {
+    if (!dbReady(req)) {
+      const result = rejectPlatformMem(req.params.id);
+      if (result.error) return res.status(result.status || 400).json({ error: result.error, detail: result.detail });
+      return respondWithState(res, false);
+    }
+    const { rows: reqRows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
+    const request = reqRows[0];
+    if (!request || request.status !== 'pending_platform') {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    const bidId = request.accepted_bid_id;
+    await query(
+      `UPDATE service_requests SET status = 'open', accepted_bid_id = NULL, host_id = NULL, amount = 0,
+       client_confirmed_at = NULL, provider_confirmed_at = NULL, platform_confirmed_at = NULL WHERE id = $1`,
+      [req.params.id],
+    );
+    if (bidId) {
+      await query("UPDATE service_bids SET status = 'pending' WHERE id = $1", [bidId]);
+    }
+    await addEvent('מנהל דחה את העסקה — הקריאה נפתחה מחדש', 'activity', true);
+    return respondWithState(res, true);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Reject failed' });
   }
 });
 

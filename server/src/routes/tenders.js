@@ -274,11 +274,21 @@ router.post('/:id/confirm', authRequired, requireRole('host'), async (req, res) 
       return res.status(404).json({ error: 'not_found' });
     }
 
-    await query(
-      "UPDATE service_requests SET status = 'assigned', provider_confirmed_at = $1, platform_confirmed_at = $2 WHERE id = $3",
-      [Date.now(), Date.now(), req.params.id],
-    );
-    await addEvent('ספק אישר את ההצעה — המיזם אישר את העסקה', 'activity', true);
+    const settings = await getSettings(true);
+    const now = Date.now();
+    if (settings.requireManagerApproval) {
+      await query(
+        "UPDATE service_requests SET status = 'pending_platform', provider_confirmed_at = $1 WHERE id = $2",
+        [now, req.params.id],
+      );
+      await addEvent('ספק אישר — ממתין לאישור מנהל', 'activity', true);
+    } else {
+      await query(
+        "UPDATE service_requests SET status = 'assigned', provider_confirmed_at = $1, platform_confirmed_at = $2 WHERE id = $3",
+        [now, now, req.params.id],
+      );
+      await addEvent('ספק אישר את ההצעה — המיזם אישר את העסקה', 'activity', true);
+    }
     const { rows } = await query('SELECT * FROM service_requests WHERE id = $1', [req.params.id]);
     res.json({ request: rowToServiceRequest(rows[0]) });
   } catch (err) {

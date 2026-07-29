@@ -56,6 +56,7 @@ export async function loadFullState(dbReady = true) {
       commission: Number(s?.commission ?? 12.5),
       cancellationFee: Number(s?.cancellation_fee ?? 15),
       otpWindowMinutes: Number(s?.otp_window_minutes ?? 15),
+      requireManagerApproval: !!s?.require_manager_approval,
     },
     users: usersRes.rows.map(rowToUser),
     stations: stationsRes.rows.map(rowToStation),
@@ -97,5 +98,6 @@ export async function getSettings(dbReady = true) {
     commission: Number(s.commission),
     cancellationFee: Number(s.cancellation_fee),
     otpWindowMinutes: Number(s.otp_window_minutes),
+    requireManagerApproval: !!s.require_manager_approval,
   };
 }

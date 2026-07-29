@@ -12,6 +12,7 @@ import tenderRoutes from './routes/tenders.js';
 import geoRoutes from './routes/geo.js';
 import paymentRoutes from './routes/payments.js';
 import opsRoutes from './routes/ops.js';
+import { createDownloadsRouter } from './routes/downloads.js';
 import { migrate } from './db/migrate.js';
 import { seed } from './db/seed.js';
 import { query } from './db/pool.js';
@@ -137,6 +138,25 @@ app.use('/api/sharecharge/geo', geoRoutes);
 app.use('/api/sharecharge/payments', paymentRoutes);
 app.use('/api/sharecharge/ops', opsRoutes);
 
+function sendPublicPage(pageName) {
+  return (_req, res) => {
+    const filePath = path.join(publicDir, pageName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).type('text/plain; charset=utf-8').send('העמוד לא נמצא — יש לפרוס גרסה עדכנית');
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.sendFile(filePath);
+  };
+}
+
+if (hasPublic) {
+  app.use('/api/downloads', createDownloadsRouter(publicDir));
+  app.get('/download', sendPublicPage('download.html'));
+  app.get('/download.html', sendPublicPage('download.html'));
+  app.get('/privacy', sendPublicPage('privacy.html'));
+  app.get('/privacy.html', sendPublicPage('privacy.html'));
+}
+
 app.use('/api', (req, res) => {
   res.status(404).json({
     error: 'not_found',
@@ -153,10 +173,15 @@ if (hasPublic) {
         if (filePath.endsWith('index.html')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
+        if (filePath.endsWith('.apk')) {
+          res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+          res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+        }
       },
     }),
   );
-  app.get(/^\/(?!api\/).*/, (_req, res) => {
+  app.get(/^\/(?!api\/)(?!download(?:\.html)?$)(?!privacy(?:\.html)?$)(?!downloads\/).*/, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(publicDir, 'index.html'));
   });

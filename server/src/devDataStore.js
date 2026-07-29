@@ -9,6 +9,7 @@ const settings = {
   commission: 12.5,
   cancellation_fee: 15,
   otp_window_minutes: 15,
+  require_manager_approval: false,
 };
 
 const seedUsers = [
@@ -356,6 +357,7 @@ export function loadFullStateMem() {
       commission: settings.commission,
       cancellationFee: settings.cancellation_fee,
       otpWindowMinutes: settings.otp_window_minutes,
+      requireManagerApproval: !!settings.require_manager_approval,
     },
     users: allUsers().map(rowToUser),
     stations: stations.map(rowToStation),
@@ -380,7 +382,13 @@ export function getSettingsMem() {
     commission: settings.commission,
     cancellationFee: settings.cancellation_fee,
     otpWindowMinutes: settings.otp_window_minutes,
+    requireManagerApproval: !!settings.require_manager_approval,
   };
+}
+
+export function setRequireManagerApprovalMem(value) {
+  settings.require_manager_approval = !!value;
+  return getSettingsMem();
 }
 
 export function addEventMem(text, type = 'activity') {
@@ -806,10 +814,47 @@ export function confirmBidMem(jwtUser, requestId) {
   if (!request || request.host_id !== jwtUser.sub || request.status !== 'pending_provider') {
     return { error: 'not_found', status: 404 };
   }
-  request.status = 'assigned';
   request.provider_confirmed_at = Date.now();
+  if (settings.require_manager_approval) {
+    request.status = 'pending_platform';
+    request.platform_confirmed_at = null;
+    addEventMem('ספק אישר — ממתין לאישור מנהל', 'activity');
+  } else {
+    request.status = 'assigned';
+    request.platform_confirmed_at = Date.now();
+    addEventMem('ספק אישר את ההצעה — המיזם אישר את העסקה', 'activity');
+  }
+  return { request: rowToServiceRequest(request) };
+}
+
+export function approvePlatformMem(requestId) {
+  if (!initialized) initMemDataStore();
+  const request = serviceRequests.find((row) => row.id === requestId);
+  if (!request || request.status !== 'pending_platform') {
+    return { error: 'not_found', status: 404 };
+  }
+  request.status = 'assigned';
   request.platform_confirmed_at = Date.now();
-  addEventMem('ספק אישר את ההצעה — המיזם אישר את העסקה', 'activity');
+  addEventMem('מנהל אישר את העסקה — יוצאים לדרך', 'activity');
+  return { request: rowToServiceRequest(request) };
+}
+
+export function rejectPlatformMem(requestId) {
+  if (!initialized) initMemDataStore();
+  const request = serviceRequests.find((row) => row.id === requestId);
+  if (!request || request.status !== 'pending_platform') {
+    return { error: 'not_found', status: 404 };
+  }
+  const bid = serviceBids.find((row) => row.id === request.accepted_bid_id);
+  request.status = 'open';
+  request.accepted_bid_id = null;
+  request.host_id = null;
+  request.amount = 0;
+  request.client_confirmed_at = null;
+  request.provider_confirmed_at = null;
+  request.platform_confirmed_at = null;
+  if (bid) bid.status = 'pending';
+  addEventMem('מנהל דחה את העסקה — הקריאה נפתחה מחדש', 'activity');
   return { request: rowToServiceRequest(request) };
 }
 

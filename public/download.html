@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>הורדת אפליקציה — ShareCharge</title>
+  <meta name="description" content="הורידו את אפליקציית ShareCharge ל-Android — עזרה בדרך בחירום ו/או טעינה חשמלית." />
+  <style>
+    :root {
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --accent-2: #0d9488;
+      --sos: #d97706;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+      margin: 0;
+      background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 240px);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1 { font-size: 1.85rem; margin: 0 0 0.35rem; }
+    .meta { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+    a { color: var(--accent); }
+    .badge {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      margin-inline-start: 0.35rem;
+      vertical-align: middle;
+    }
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--muted);
+      margin: 1.75rem 0 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 0.75rem;
+      box-shadow: var(--shadow);
+    }
+    .card--recommended { border-color: #fcd34d; background: linear-gradient(135deg, #fffbeb, #ffffff); }
+    .card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+    .card-meta { margin-top: 0.65rem; font-size: 0.8rem; color: var(--muted); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      margin-top: 0.85rem;
+      padding: 0.75rem 1.1rem;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 0.95rem;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #0ea5e9); color: #fff; }
+    .btn-sos { background: linear-gradient(135deg, var(--sos), #f59e0b); color: #fff; }
+    .btn-disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+    .steps { padding-right: 1.1rem; }
+    .steps li { margin-bottom: 0.45rem; }
+    .loading, .empty { text-align: center; color: var(--muted); padding: 2rem 1rem; }
+    .footer { margin-top: 2rem; font-size: 0.85rem; color: var(--muted); text-align: center; }
+    .version-pill {
+      display: inline-block;
+      background: #ecfdf5;
+      color: #047857;
+      font-size: 0.8rem;
+      font-weight: 800;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>הורדת אפליקציית ShareCharge</h1>
+    <p class="meta">
+      Android · APK · <a href="/">חזרה לאתר</a> · <a href="/privacy.html">מדיניות פרטיות</a>
+    </p>
+    <p id="version-line"></p>
+
+    <div id="list" class="loading">טוען רשימת גרסאות…</div>
+
+    <div class="section-title">התקנה במכשיר Android</div>
+    <div class="card">
+      <ol class="steps">
+        <li>הורידו את קובץ ה-APK (כפתור «הורדה» למטה).</li>
+        <li>אם מופיעה אזהרה — אשרו «התקנה ממקורות לא ידועים» להגדרות Chrome / הקבצים.</li>
+        <li>פתחו את הקובץ שהורד והתקינו.</li>
+        <li>להסרת גרסה ישנה — מחקו את האפליקציה הקודמת לפני התקנה (אם אותו package).</li>
+      </ol>
+      <p class="card-meta">גרסת SOS וגרסה מלאה הן אפליקציות נפרדות — ניתן להתקין את שתיהן.</p>
+    </div>
+
+    <p class="footer">ShareCharge · תמיכה: <a href="mailto:support@sharecharge.app">support@sharecharge.app</a></p>
+  </main>
+
+  <script>
+    function fmtBytes(n) {
+      if (!n) return '';
+      const mb = n / 1024 / 1024;
+      return mb >= 1 ? mb.toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleString('he-IL', { dateStyle: 'medium', timeStyle: 'short' });
+      } catch {
+        return '';
+      }
+    }
+
+    function renderCard(item) {
+      const recommended = item.recommended ? '<span class="badge">מומלץ</span>' : '';
+      const cls = item.recommended ? 'card card--recommended' : 'card';
+      const btnCls = item.group === 'sos' ? 'btn btn-sos' : 'btn btn-primary';
+      const meta = item.available
+        ? `<div class="card-meta">${fmtBytes(item.bytes)} · עודכן ${fmtDate(item.updatedAt)}</div>`
+        : '<div class="card-meta">לא זמין כרגע בשרת — נסו שוב מאוחר יותר</div>';
+      const action = item.available
+        ? `<a class="${btnCls}" href="${item.url}" download>הורדה · ${item.file.replace('.apk', '')}</a>`
+        : '<span class="btn btn-disabled">לא זמין</span>';
+      return `
+        <article class="${cls}">
+          <h2>${item.title}${recommended}</h2>
+          <p>${item.description || ''}</p>
+          ${meta}
+          ${action}
+        </article>`;
+    }
+
+    async function load() {
+      const list = document.getElementById('list');
+      const versionLine = document.getElementById('version-line');
+      try {
+        const res = await fetch('/api/downloads', { cache: 'no-store' });
+        const data = await res.json();
+        if (data.version && data.version !== '?') {
+          versionLine.innerHTML = `<span class="version-pill">גרסה ${data.version}</span>`;
+        }
+        const available = (data.downloads || []).filter((d) => d.available);
+        const unavailable = (data.downloads || []).filter((d) => !d.available);
+        if (!available.length && !unavailable.length) {
+          list.innerHTML = '<p class="empty">אין קבצי APK בשרת כרגע.</p>';
+          return;
+        }
+        const sos = available.filter((d) => d.group === 'sos');
+        const full = available.filter((d) => d.group === 'full');
+        let html = '';
+        if (sos.length) {
+          html += '<div class="section-title">ShareCharge SOS — חירום בדרך בלבד</div>';
+          html += sos.map(renderCard).join('');
+        }
+        if (full.length) {
+          html += '<div class="section-title">ShareCharge מלא — טעינה + חירום</div>';
+          html += full.map(renderCard).join('');
+        }
+        const hidden = unavailable.filter((d) => !available.some((a) => a.file === d.file));
+        if (hidden.length) {
+          html += '<div class="section-title">בקרוב</div>';
+          html += hidden.map(renderCard).join('');
+        }
+        list.innerHTML = html;
+      } catch (err) {
+        list.innerHTML = '<p class="empty">לא ניתן לטעון את רשימת ההורדות. נסו לרענן.</p>';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
