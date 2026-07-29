@@ -1,31 +1,14 @@
 {
   "version": "1.0.48",
-  "builtAt": "2026-07-29T11:42:55.805Z",
+  "builtAt": "2026-07-29T13:22:17.303Z",
+  "published": [
+    "ShareCharge-sos-dual.apk"
+  ],
   "files": [
     {
       "file": "ShareCharge-sos-dual.apk",
       "bytes": 9596294,
       "updatedAt": "2026-07-29T06:06:38.396Z"
-    },
-    {
-      "file": "ShareCharge-dual.apk",
-      "bytes": 9604884,
-      "updatedAt": "2026-07-19T04:31:38.025Z"
-    },
-    {
-      "file": "ShareCharge-client.apk",
-      "bytes": 9585624,
-      "updatedAt": "2026-07-12T19:57:19.053Z"
-    },
-    {
-      "file": "ShareCharge-provider.apk",
-      "bytes": 9585744,
-      "updatedAt": "2026-07-12T19:57:20.062Z"
-    },
-    {
-      "file": "ShareCharge-ops.apk",
-      "bytes": 9585760,
-      "updatedAt": "2026-07-12T19:57:20.210Z"
     }
   ]
 }
